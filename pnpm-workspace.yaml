@@ -4,4 +4,6 @@ packages:
 
 engineStrict: true
 autoInstallPeers: true
-onlyBuiltDependencies: []
+onlyBuiltDependencies:
+  - electron
+  - esbuild
