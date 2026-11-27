@@ -1,5 +1,5 @@
 import { GitBranch, PaperPlaneRight, Scales, Stop, Trash } from '@phosphor-icons/react';
-import { useRef, useState, type FormEvent } from 'react';
+import { Suspense, lazy, useRef, useState, type FormEvent } from 'react';
 import {
   TASK_TAGS,
   parseInlineMention,
@@ -25,18 +25,25 @@ import {
   type ToolActivityEntry,
 } from '../state/turn-stream';
 import { ApprovalModePicker } from './ApprovalModePicker';
-import { ChangeCard } from './ChangeCard';
 import { CoordinationLogCard } from './CoordinationLogCard';
 import { EngineMark } from './EngineMark';
 import { HandoffRelayBanner } from './HandoffRelayBanner';
 import { useLanguage } from './LanguageProvider';
-import { MarkdownContent } from './MarkdownContent';
 import { ModelPicker } from './ModelPicker';
 import { PlanApprovalCard } from './PlanApprovalCard';
 import { RecipePicker } from './RecipePicker';
-import { SecondOpinionCard } from './SecondOpinionCard';
 import { ToolActivityBlock } from './ToolActivityBlock';
 import { ZompoStatusStrip } from './ZompoStatusStrip';
+
+const ChangeCard = lazy(() =>
+  import('./ChangeCard').then((m) => ({ default: m.ChangeCard })),
+);
+const MarkdownContent = lazy(() =>
+  import('./MarkdownContent').then((m) => ({ default: m.MarkdownContent })),
+);
+const SecondOpinionCard = lazy(() =>
+  import('./SecondOpinionCard').then((m) => ({ default: m.SecondOpinionCard })),
+);
 
 export interface MessageTurnMeta {
   readonly tools: readonly ToolActivityEntry[];
@@ -335,7 +342,9 @@ export function ChatWorkspace({
               {msg.role === 'user' ? (
                 <div className="whitespace-pre-wrap text-[14px] text-ink">{msg.content}</div>
               ) : (
-                <MarkdownContent content={msg.content} />
+                <Suspense fallback={<div className="whitespace-pre-wrap text-[14px] text-ink">{msg.content}</div>}>
+                  <MarkdownContent content={msg.content} />
+                </Suspense>
               )}
             </article>
           );
@@ -365,7 +374,9 @@ export function ChatWorkspace({
             ) : null}
 
             {streaming.text ? (
-              <MarkdownContent content={streaming.text} />
+              <Suspense fallback={<div className="whitespace-pre-wrap text-[14px] text-ink">{streaming.text}</div>}>
+                <MarkdownContent content={streaming.text} />
+              </Suspense>
             ) : (
               <p className="tabular-mono m-0 text-[12px] text-ink-tertiary">Awaiting output...</p>
             )}
@@ -381,12 +392,14 @@ export function ChatWorkspace({
       ) : null}
 
       {activeSecondOpinion ? (
-        <SecondOpinionCard
-          opinion={activeSecondOpinion}
-          modelOptions={modelOptions}
-          busy={secondOpinionBusy}
-          onResolve={onResolveSecondOpinion}
-        />
+        <Suspense fallback={null}>
+          <SecondOpinionCard
+            opinion={activeSecondOpinion}
+            modelOptions={modelOptions}
+            busy={secondOpinionBusy}
+            onResolve={onResolveSecondOpinion}
+          />
+        </Suspense>
       ) : null}
 
       {activeRecipeRun ? (
@@ -412,29 +425,31 @@ export function ChatWorkspace({
       />
 
       {project.isValidGitRepo ? (
-        <ChangeCard
-          branchName={project.currentBranch}
-          defaultBranch={project.defaultBranch}
-          testCommand={project.testCommand}
-          snapshot={changeSnapshot}
-          testResult={testResult}
-          loading={loadingChanges}
-          runningTests={runningTests}
-          committing={committingChanges}
-          discarding={discardingChanges}
-          integrating={integratingBranch}
-          errorMessage={changeError}
-          lastNotice={changeNotice}
-          onRefresh={onRefreshChanges}
-          onRunTests={onRunTests}
-          onApprove={onApproveChanges}
-          onDiscard={onDiscardChanges}
-          onIntegrateBranch={onIntegrateBranch}
-          onRequestChanges={(contextSummary) => {
-            setPrompt((prev) => (prev.trim().length === 0 ? contextSummary : prev));
-            composerRef.current?.focus();
-          }}
-        />
+        <Suspense fallback={null}>
+          <ChangeCard
+            branchName={project.currentBranch}
+            defaultBranch={project.defaultBranch}
+            testCommand={project.testCommand}
+            snapshot={changeSnapshot}
+            testResult={testResult}
+            loading={loadingChanges}
+            runningTests={runningTests}
+            committing={committingChanges}
+            discarding={discardingChanges}
+            integrating={integratingBranch}
+            errorMessage={changeError}
+            lastNotice={changeNotice}
+            onRefresh={onRefreshChanges}
+            onRunTests={onRunTests}
+            onApprove={onApproveChanges}
+            onDiscard={onDiscardChanges}
+            onIntegrateBranch={onIntegrateBranch}
+            onRequestChanges={(contextSummary) => {
+              setPrompt((prev) => (prev.trim().length === 0 ? contextSummary : prev));
+              composerRef.current?.focus();
+            }}
+          />
+        </Suspense>
       ) : null}
 
       <form

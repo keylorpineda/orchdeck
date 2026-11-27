@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
 import {
   parseInlineMention,
   parseModelHandle,
@@ -32,12 +32,17 @@ import {
 } from '@orchdeck/shared';
 import { ChatWorkspace, type MessageTurnMeta } from './components/ChatWorkspace';
 import { LanguageProvider, useLanguage } from './components/LanguageProvider';
-import { PluginsDrawer } from './components/PluginsDrawer';
-import { ProjectMemoryPanel } from './components/ProjectMemoryPanel';
 import { ProjectSidebar } from './components/ProjectSidebar';
 import { ThemeProvider } from './components/ThemeProvider';
 import { UsageQuotaRadar } from './components/UsageQuotaRadar';
 import { WorkbenchShell } from './components/WorkbenchShell';
+
+const PluginsDrawer = lazy(() =>
+  import('./components/PluginsDrawer').then((m) => ({ default: m.PluginsDrawer })),
+);
+const ProjectMemoryPanel = lazy(() =>
+  import('./components/ProjectMemoryPanel').then((m) => ({ default: m.ProjectMemoryPanel })),
+);
 import {
   FALLBACK_MODEL_OPTIONS,
   applyTurnEventToDraft,
@@ -1092,40 +1097,42 @@ function WorkbenchApp() {
             </button>
           </div>
 
-          {inspectorTab === 'plugins' ? (
-            <PluginsDrawer
-              projectId={selectedProjectId}
-              plugins={plugins}
-              skills={skills}
-              mcpStatus={mcpStatus}
-              loading={loadingInspector}
-              onRefresh={() => {
-                void refreshInspector(selectedProjectId);
-              }}
-              onTogglePlugin={(pluginId, enabled) => {
-                void handleTogglePlugin(pluginId, enabled);
-              }}
-              onToggleSkill={(skillId, enabled) => {
-                void handleToggleSkill(skillId, enabled);
-              }}
-              onDecideMcpApproval={(approvalId, decision) => {
-                void handleDecideMcpApproval(approvalId, decision);
-              }}
-            />
-          ) : (
-            <ProjectMemoryPanel
-              projectId={selectedProjectId}
-              entries={memoryEntries}
-              promptPreview={memoryPromptPreview}
-              maxChars={memoryMaxChars}
-              errorMessage={memoryError}
-              statusMessage={memoryStatus}
-              onUpsert={handleUpsertMemory}
-              onDelete={handleDeleteMemory}
-              onSyncDoc={handleSyncMemoryDoc}
-              onImportDoc={handleImportMemoryDoc}
-            />
-          )}
+          <Suspense fallback={<div className="tabular-mono text-[11px] text-ink-tertiary">Loading...</div>}>
+            {inspectorTab === 'plugins' ? (
+              <PluginsDrawer
+                projectId={selectedProjectId}
+                plugins={plugins}
+                skills={skills}
+                mcpStatus={mcpStatus}
+                loading={loadingInspector}
+                onRefresh={() => {
+                  void refreshInspector(selectedProjectId);
+                }}
+                onTogglePlugin={(pluginId, enabled) => {
+                  void handleTogglePlugin(pluginId, enabled);
+                }}
+                onToggleSkill={(skillId, enabled) => {
+                  void handleToggleSkill(skillId, enabled);
+                }}
+                onDecideMcpApproval={(approvalId, decision) => {
+                  void handleDecideMcpApproval(approvalId, decision);
+                }}
+              />
+            ) : (
+              <ProjectMemoryPanel
+                projectId={selectedProjectId}
+                entries={memoryEntries}
+                promptPreview={memoryPromptPreview}
+                maxChars={memoryMaxChars}
+                errorMessage={memoryError}
+                statusMessage={memoryStatus}
+                onUpsert={handleUpsertMemory}
+                onDelete={handleDeleteMemory}
+                onSyncDoc={handleSyncMemoryDoc}
+                onImportDoc={handleImportMemoryDoc}
+              />
+            )}
+          </Suspense>
         </div>
       }
       radarSlot={

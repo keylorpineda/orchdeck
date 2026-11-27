@@ -931,9 +931,16 @@ function createMainWindow(): BrowserWindow {
     height: 760,
     minWidth: 880,
     minHeight: 580,
+    show: false,
     title: 'Orchdeck',
     backgroundColor: '#F6F4EE',
     webPreferences: createSecureWebPreferences(preloadPath),
+  });
+
+  win.once('ready-to-show', () => {
+    win.show();
+    win.moveTop();
+    win.focus();
   });
 
   win.on('closed', () => {
