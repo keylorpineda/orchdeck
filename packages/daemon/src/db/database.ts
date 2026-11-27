@@ -12,6 +12,9 @@ import {
   type ProjectRecord,
   type ProviderId,
   type ProviderUsageSummary,
+  type RecipeCreateParams,
+  type RecipeRecord,
+  type RecipeUpdateParams,
   type UsageSummaryResult,
   type UsageWindowBucket,
 } from '@orchdeck/shared';
@@ -94,7 +97,7 @@ function mapMessageRow(row: Record<string, unknown>): MessageRecord {
     typeof providerRaw === 'string' && isProviderId(providerRaw) ? providerRaw : null;
   const modelRaw = row['model_id'];
 
-  return {
+    return {
     id: String(row['id'] ?? ''),
     chatId: String(row['chat_id'] ?? ''),
     role,
@@ -102,6 +105,24 @@ function mapMessageRow(row: Record<string, unknown>): MessageRecord {
     modelId: typeof modelRaw === 'string' && modelRaw.length > 0 ? modelRaw : null,
     content: String(row['content'] ?? ''),
     createdAt: String(row['created_at'] ?? ''),
+  };
+}
+
+function mapRecipeRow(row: Record<string, unknown>): RecipeRecord {
+  const fallbackRaw = row['fallback_model'];
+  return {
+    id: String(row['id'] ?? ''),
+    name: String(row['name'] ?? ''),
+    description: String(row['description'] ?? ''),
+    plannerModel: String(row['planner_model'] ?? ''),
+    builderModel: String(row['builder_model'] ?? ''),
+    reviewerModel: String(row['reviewer_model'] ?? ''),
+    fallbackModel:
+      typeof fallbackRaw === 'string' && fallbackRaw.length > 0 ? fallbackRaw : null,
+    maxReviewRetries: Number(row['max_review_retries'] ?? 2),
+    isBuiltin: Number(row['is_builtin'] ?? 0) === 1,
+    createdAt: String(row['created_at'] ?? ''),
+    updatedAt: String(row['updated_at'] ?? ''),
   };
 }
 
@@ -127,6 +148,75 @@ export class DaemonDatabase {
     }
 
     this.applyMigrations();
+    this.seedBuiltinRecipes();
+  }
+
+  private seedBuiltinRecipes(): void {
+    const now = new Date().toISOString();
+    const stmt = this.db.prepare(`
+      INSERT OR IGNORE INTO recipes (
+        id, name, description, planner_model, builder_model, reviewer_model,
+        fallback_model, max_review_retries, is_builtin, created_at, updated_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+    `);
+
+    const presets: readonly {
+      readonly id: string;
+      readonly name: string;
+      readonly description: string;
+      readonly planner: string;
+      readonly builder: string;
+      readonly reviewer: string;
+      readonly fallback: string;
+      readonly retries: number;
+    }[] = [
+      {
+        id: 'builtin-balanced',
+        name: 'Balanced Team (Neon -> Codex -> Opus)',
+        description: 'Gemini 4 Neon plans, Codex builds on task branch, Claude Opus reviews read-only.',
+        planner: 'antigravity:gemini-4-neon:high',
+        builder: 'codex:gpt-5.4:high',
+        reviewer: 'claude:opus-4-6:high',
+        fallback: 'claude:sonnet-4-6:medium',
+        retries: 2,
+      },
+      {
+        id: 'builtin-claude-codex',
+        name: 'Claude Architect + Codex Builder',
+        description: 'Claude Opus plans and reviews; Codex executes implementation.',
+        planner: 'claude:opus-4-6:high',
+        builder: 'codex:gpt-5.4:high',
+        reviewer: 'claude:opus-4-6:high',
+        fallback: 'antigravity:gemini-4-neon:high',
+        retries: 2,
+      },
+      {
+        id: 'builtin-fast-iterate',
+        name: 'Fast Iterate',
+        description: 'Quick multi-model cycle with 1 bounded review retry.',
+        planner: 'claude:sonnet-4-6:medium',
+        builder: 'codex:gpt-5.4:high',
+        reviewer: 'claude:sonnet-4-6:medium',
+        fallback: 'antigravity:gemini-4-neon:high',
+        retries: 1,
+      },
+    ];
+
+    for (const preset of presets) {
+      stmt.run(
+        preset.id,
+        preset.name,
+        preset.description,
+        preset.planner,
+        preset.builder,
+        preset.reviewer,
+        preset.fallback,
+        preset.retries,
+        now,
+        now,
+      );
+    }
   }
 
   private applyMigrations(): void {
@@ -577,6 +667,152 @@ export class DaemonDatabase {
       generatedAt: new Date(nowMs).toISOString(),
       providers,
     };
+  }
+
+  listRecipes(): RecipeRecord[] {
+    const rows = this.db
+      .prepare(
+        `
+        SELECT id, name, description, planner_model, builder_model, reviewer_model,
+               fallback_model, max_review_retries, is_builtin, created_at, updated_at
+        FROM recipes
+        ORDER BY is_builtin DESC, created_at ASC
+        `,
+      )
+      .all() as Array<Record<string, unknown>>;
+
+    return rows.map(mapRecipeRow);
+  }
+
+  getRecipe(id: string): RecipeRecord | null {
+    const row = this.db
+      .prepare(
+        `
+        SELECT id, name, description, planner_model, builder_model, reviewer_model,
+               fallback_model, max_review_retries, is_builtin, created_at, updated_at
+        FROM recipes
+        WHERE id = ?
+        `,
+      )
+      .get(id) as Record<string, unknown> | undefined;
+
+    return row ? mapRecipeRow(row) : null;
+  }
+
+  createRecipe(input: RecipeCreateParams): RecipeRecord {
+    const id = crypto.randomUUID();
+    const now = new Date().toISOString();
+    const maxRetries = Math.max(0, Math.min(5, input.maxReviewRetries ?? 2));
+    const fallbackModel =
+      input.fallbackModel && input.fallbackModel.trim().length > 0
+        ? input.fallbackModel.trim()
+        : null;
+
+    this.db
+      .prepare(
+        `
+        INSERT INTO recipes (
+          id, name, description, planner_model, builder_model, reviewer_model,
+          fallback_model, max_review_retries, is_builtin, created_at, updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
+        `,
+      )
+      .run(
+        id,
+        input.name.trim(),
+        input.description.trim(),
+        input.plannerModel.trim(),
+        input.builderModel.trim(),
+        input.reviewerModel.trim(),
+        fallbackModel,
+        maxRetries,
+        now,
+        now,
+      );
+
+    return {
+      id,
+      name: input.name.trim(),
+      description: input.description.trim(),
+      plannerModel: input.plannerModel.trim(),
+      builderModel: input.builderModel.trim(),
+      reviewerModel: input.reviewerModel.trim(),
+      fallbackModel,
+      maxReviewRetries: maxRetries,
+      isBuiltin: false,
+      createdAt: now,
+      updatedAt: now,
+    };
+  }
+
+  updateRecipe(input: RecipeUpdateParams): RecipeRecord {
+    const existing = this.getRecipe(input.id);
+    if (!existing) {
+      throw new Error(`Recipe "${input.id}" not found.`);
+    }
+
+    const name = input.name?.trim() || existing.name;
+    const description = input.description !== undefined ? input.description.trim() : existing.description;
+    const plannerModel = input.plannerModel?.trim() || existing.plannerModel;
+    const builderModel = input.builderModel?.trim() || existing.builderModel;
+    const reviewerModel = input.reviewerModel?.trim() || existing.reviewerModel;
+    const fallbackModel =
+      input.fallbackModel === undefined
+        ? existing.fallbackModel
+        : input.fallbackModel && input.fallbackModel.trim().length > 0
+          ? input.fallbackModel.trim()
+          : null;
+    const maxReviewRetries =
+      input.maxReviewRetries !== undefined
+        ? Math.max(0, Math.min(5, input.maxReviewRetries))
+        : existing.maxReviewRetries;
+    const now = new Date().toISOString();
+
+    this.db
+      .prepare(
+        `
+        UPDATE recipes
+        SET name = ?, description = ?, planner_model = ?, builder_model = ?,
+            reviewer_model = ?, fallback_model = ?, max_review_retries = ?, updated_at = ?
+        WHERE id = ?
+        `,
+      )
+      .run(
+        name,
+        description,
+        plannerModel,
+        builderModel,
+        reviewerModel,
+        fallbackModel,
+        maxReviewRetries,
+        now,
+        input.id,
+      );
+
+    return {
+      ...existing,
+      name,
+      description,
+      plannerModel,
+      builderModel,
+      reviewerModel,
+      fallbackModel,
+      maxReviewRetries,
+      updatedAt: now,
+    };
+  }
+
+  deleteRecipe(id: string): boolean {
+    const existing = this.getRecipe(id);
+    if (!existing) {
+      return false;
+    }
+    if (existing.isBuiltin) {
+      throw new Error('Built-in recipes cannot be deleted.');
+    }
+    const result = this.db.prepare('DELETE FROM recipes WHERE id = ?').run(id);
+    return Number(result.changes) > 0;
   }
 
   close(): void {

@@ -357,6 +357,145 @@ function registerIpcHandlers(): void {
     }
     return supervisor.getClient().call('usage.summary', { providerId });
   });
+
+  ipcMain.handle('orchdeck:recipes-list', async () => {
+    return supervisor.getClient().call('recipes.list', {});
+  });
+
+  ipcMain.handle('orchdeck:recipes-create', async (_event, rawParams: unknown) => {
+    const params = asObject(rawParams, 'orchdeck:recipes-create');
+    const name = params['name'];
+    const description = params['description'];
+    const plannerModel = params['plannerModel'];
+    const builderModel = params['builderModel'];
+    const reviewerModel = params['reviewerModel'];
+    const fallbackModel = params['fallbackModel'];
+    const maxReviewRetries = params['maxReviewRetries'];
+    if (
+      typeof name !== 'string' ||
+      name.trim().length === 0 ||
+      typeof description !== 'string' ||
+      typeof plannerModel !== 'string' ||
+      typeof builderModel !== 'string' ||
+      typeof reviewerModel !== 'string' ||
+      (fallbackModel !== undefined && fallbackModel !== null && typeof fallbackModel !== 'string') ||
+      (maxReviewRetries !== undefined && typeof maxReviewRetries !== 'number')
+    ) {
+      throw new Error('Invalid params for orchdeck:recipes-create.');
+    }
+    return supervisor.getClient().call('recipes.create', {
+      name,
+      description,
+      plannerModel,
+      builderModel,
+      reviewerModel,
+      fallbackModel,
+      maxReviewRetries,
+    });
+  });
+
+  ipcMain.handle('orchdeck:recipes-update', async (_event, rawParams: unknown) => {
+    const params = asObject(rawParams, 'orchdeck:recipes-update');
+    const id = params['id'];
+    if (typeof id !== 'string' || id.length === 0) {
+      throw new Error('Invalid id for orchdeck:recipes-update.');
+    }
+    return supervisor.getClient().call('recipes.update', {
+      id,
+      name: typeof params['name'] === 'string' ? params['name'] : undefined,
+      description: typeof params['description'] === 'string' ? params['description'] : undefined,
+      plannerModel: typeof params['plannerModel'] === 'string' ? params['plannerModel'] : undefined,
+      builderModel: typeof params['builderModel'] === 'string' ? params['builderModel'] : undefined,
+      reviewerModel: typeof params['reviewerModel'] === 'string' ? params['reviewerModel'] : undefined,
+      fallbackModel:
+        params['fallbackModel'] === null || typeof params['fallbackModel'] === 'string'
+          ? params['fallbackModel']
+          : undefined,
+      maxReviewRetries:
+        typeof params['maxReviewRetries'] === 'number' ? params['maxReviewRetries'] : undefined,
+    });
+  });
+
+  ipcMain.handle('orchdeck:recipes-delete', async (_event, id: unknown) => {
+    if (typeof id !== 'string' || id.length === 0) {
+      throw new Error('Invalid id for orchdeck:recipes-delete.');
+    }
+    return supervisor.getClient().call('recipes.delete', { id });
+  });
+
+  ipcMain.handle('orchdeck:recipes-run', async (_event, rawParams: unknown) => {
+    const params = asObject(rawParams, 'orchdeck:recipes-run');
+    const recipeId = params['recipeId'];
+    const projectId = params['projectId'];
+    const chatId = params['chatId'];
+    const cwd = params['cwd'];
+    const prompt = params['prompt'];
+    if (
+      typeof recipeId !== 'string' ||
+      recipeId.length === 0 ||
+      typeof projectId !== 'string' ||
+      projectId.length === 0 ||
+      typeof chatId !== 'string' ||
+      chatId.length === 0 ||
+      typeof cwd !== 'string' ||
+      cwd.length === 0 ||
+      typeof prompt !== 'string' ||
+      prompt.trim().length === 0
+    ) {
+      throw new Error('Invalid params for orchdeck:recipes-run.');
+    }
+    return supervisor.getClient().call('recipes.run', {
+      recipeId,
+      projectId,
+      chatId,
+      cwd,
+      prompt,
+    });
+  });
+
+  ipcMain.handle('orchdeck:handoff-relay', async (_event, rawParams: unknown) => {
+    const params = asObject(rawParams, 'orchdeck:handoff-relay');
+    const projectId = params['projectId'];
+    const chatId = params['chatId'];
+    const cwd = params['cwd'];
+    const targetModelHandle = params['targetModelHandle'];
+    const goal = params['goal'];
+    const nextStep = params['nextStep'];
+    if (
+      typeof projectId !== 'string' ||
+      projectId.length === 0 ||
+      typeof chatId !== 'string' ||
+      chatId.length === 0 ||
+      typeof cwd !== 'string' ||
+      cwd.length === 0 ||
+      typeof targetModelHandle !== 'string' ||
+      targetModelHandle.length === 0 ||
+      typeof goal !== 'string' ||
+      goal.trim().length === 0 ||
+      typeof nextStep !== 'string' ||
+      nextStep.trim().length === 0
+    ) {
+      throw new Error('Invalid params for orchdeck:handoff-relay.');
+    }
+    const decisionsRaw = params['decisions'];
+    const decisions = Array.isArray(decisionsRaw)
+      ? decisionsRaw.filter((d): d is string => typeof d === 'string')
+      : undefined;
+    return supervisor.getClient().call('handoff.relay', {
+      projectId,
+      chatId,
+      cwd,
+      targetModelHandle,
+      goal,
+      decisions,
+      nextStep,
+      sourceModelHandle:
+        typeof params['sourceModelHandle'] === 'string' ? params['sourceModelHandle'] : undefined,
+      latestTestOutput:
+        typeof params['latestTestOutput'] === 'string' ? params['latestTestOutput'] : undefined,
+      reason: typeof params['reason'] === 'string' ? params['reason'] : undefined,
+    });
+  });
 }
 
 function configureSecurityHeaders(): void {
@@ -433,6 +572,8 @@ async function bootstrap(): Promise<void> {
       mainWindow.webContents.send('orchdeck:turn-event', notification.params);
     } else if (notification.method === 'taskRun.updated') {
       mainWindow.webContents.send('orchdeck:task-run-updated', notification.params);
+    } else if (notification.method === 'recipeRun.updated') {
+      mainWindow.webContents.send('orchdeck:recipe-run-updated', notification.params);
     }
   });
   registerIpcHandlers();

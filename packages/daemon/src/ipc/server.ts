@@ -29,6 +29,7 @@ import type { AdapterRegistry } from '../adapters/adapter-registry.js';
 import type { TurnRunner } from '../adapters/turn-runner.js';
 import type { TaskRunOrchestrator } from '../approvals/task-run-machine.js';
 import type { DaemonDatabase } from '../db/database.js';
+import type { RecipeOrchestrator } from '../fusion/recipe-orchestrator.js';
 import { GitService } from '../git/git-service.js';
 
 const MAX_LINE_BYTES = 1024 * 1024;
@@ -40,6 +41,7 @@ export interface DaemonRpcServerOptions {
   readonly registry?: AdapterRegistry | undefined;
   readonly turnRunner?: TurnRunner | undefined;
   readonly taskRunOrchestrator?: TaskRunOrchestrator | undefined;
+  readonly recipeOrchestrator?: RecipeOrchestrator | undefined;
   readonly gitService?: GitService | undefined;
   readonly startedAtMs?: number | undefined;
 }
@@ -108,6 +110,7 @@ export class DaemonRpcServer {
   private readonly registry: AdapterRegistry | undefined;
   private readonly turnRunner: TurnRunner | undefined;
   private readonly taskRunOrchestrator: TaskRunOrchestrator | undefined;
+  private readonly recipeOrchestrator: RecipeOrchestrator | undefined;
   private readonly gitService: GitService;
   private readonly startedAtMs: number;
   private readonly server: net.Server;
@@ -124,6 +127,7 @@ export class DaemonRpcServer {
     this.registry = options.registry;
     this.turnRunner = options.turnRunner;
     this.taskRunOrchestrator = options.taskRunOrchestrator;
+    this.recipeOrchestrator = options.recipeOrchestrator;
     this.gitService = options.gitService ?? new GitService();
     this.startedAtMs = options.startedAtMs ?? Date.now();
     this.server = net.createServer((socket) => {
@@ -893,6 +897,206 @@ export class DaemonRpcServer {
             );
           }
           return makeSuccessResponse(request.id, this.db.getUsageSummary(providerId));
+        }
+
+        case 'recipes.list':
+          return makeSuccessResponse(request.id, { recipes: this.db.listRecipes() });
+
+        case 'recipes.create': {
+          const name = params['name'];
+          const description = params['description'];
+          const plannerModel = params['plannerModel'];
+          const builderModel = params['builderModel'];
+          const reviewerModel = params['reviewerModel'];
+          const fallbackModel = params['fallbackModel'];
+          const maxReviewRetries = params['maxReviewRetries'];
+          if (
+            typeof name !== 'string' ||
+            name.trim().length === 0 ||
+            typeof description !== 'string' ||
+            typeof plannerModel !== 'string' ||
+            plannerModel.trim().length === 0 ||
+            typeof builderModel !== 'string' ||
+            builderModel.trim().length === 0 ||
+            typeof reviewerModel !== 'string' ||
+            reviewerModel.trim().length === 0 ||
+            (fallbackModel !== undefined && fallbackModel !== null && typeof fallbackModel !== 'string') ||
+            (maxReviewRetries !== undefined && typeof maxReviewRetries !== 'number')
+          ) {
+            return makeErrorResponse(
+              request.id,
+              JSONRPC_ERROR_CODE.INVALID_PARAMS,
+              'recipes.create requires valid name, description, plannerModel, builderModel, and reviewerModel.',
+            );
+          }
+          const recipe = this.db.createRecipe({
+            name,
+            description,
+            plannerModel,
+            builderModel,
+            reviewerModel,
+            fallbackModel,
+            maxReviewRetries,
+          });
+          return makeSuccessResponse(request.id, { recipe });
+        }
+
+        case 'recipes.update': {
+          const id = params['id'];
+          if (typeof id !== 'string' || id.length === 0) {
+            return makeErrorResponse(
+              request.id,
+              JSONRPC_ERROR_CODE.INVALID_PARAMS,
+              'recipes.update requires non-empty id.',
+            );
+          }
+          const recipe = this.db.updateRecipe({
+            id,
+            name: typeof params['name'] === 'string' ? params['name'] : undefined,
+            description: typeof params['description'] === 'string' ? params['description'] : undefined,
+            plannerModel: typeof params['plannerModel'] === 'string' ? params['plannerModel'] : undefined,
+            builderModel: typeof params['builderModel'] === 'string' ? params['builderModel'] : undefined,
+            reviewerModel:
+              typeof params['reviewerModel'] === 'string' ? params['reviewerModel'] : undefined,
+            fallbackModel:
+              params['fallbackModel'] === null || typeof params['fallbackModel'] === 'string'
+                ? params['fallbackModel']
+                : undefined,
+            maxReviewRetries:
+              typeof params['maxReviewRetries'] === 'number'
+                ? params['maxReviewRetries']
+                : undefined,
+          });
+          return makeSuccessResponse(request.id, { recipe });
+        }
+
+        case 'recipes.delete': {
+          const id = params['id'];
+          if (typeof id !== 'string' || id.length === 0) {
+            return makeErrorResponse(
+              request.id,
+              JSONRPC_ERROR_CODE.INVALID_PARAMS,
+              'recipes.delete requires non-empty id.',
+            );
+          }
+          return makeSuccessResponse(request.id, { deleted: this.db.deleteRecipe(id) });
+        }
+
+        case 'recipes.run': {
+          if (!this.recipeOrchestrator) {
+            return makeErrorResponse(
+              request.id,
+              JSONRPC_ERROR_CODE.INTERNAL_ERROR,
+              'RecipeOrchestrator is not configured in this daemon instance.',
+            );
+          }
+          const recipeId = params['recipeId'];
+          const projectId = params['projectId'];
+          const chatId = params['chatId'];
+          const cwd = params['cwd'];
+          const prompt = params['prompt'];
+          if (
+            typeof recipeId !== 'string' ||
+            recipeId.length === 0 ||
+            typeof projectId !== 'string' ||
+            projectId.length === 0 ||
+            typeof chatId !== 'string' ||
+            chatId.length === 0 ||
+            typeof cwd !== 'string' ||
+            cwd.length === 0 ||
+            typeof prompt !== 'string' ||
+            prompt.trim().length === 0
+          ) {
+            return makeErrorResponse(
+              request.id,
+              JSONRPC_ERROR_CODE.INVALID_PARAMS,
+              'recipes.run requires recipeId, projectId, chatId, cwd, and prompt.',
+            );
+          }
+          const recipeRun = await this.recipeOrchestrator.runRecipe({
+            recipeId,
+            projectId,
+            chatId,
+            cwd,
+            prompt,
+          });
+          return makeSuccessResponse(request.id, { recipeRun });
+        }
+
+        case 'recipes.getRun': {
+          if (!this.recipeOrchestrator) {
+            return makeSuccessResponse(request.id, { recipeRun: null });
+          }
+          const recipeRunId = params['recipeRunId'];
+          if (typeof recipeRunId !== 'string' || recipeRunId.length === 0) {
+            return makeErrorResponse(
+              request.id,
+              JSONRPC_ERROR_CODE.INVALID_PARAMS,
+              'recipes.getRun requires non-empty recipeRunId.',
+            );
+          }
+          return makeSuccessResponse(request.id, {
+            recipeRun: this.recipeOrchestrator.getRun(recipeRunId),
+          });
+        }
+
+        case 'handoff.relay': {
+          if (!this.recipeOrchestrator) {
+            return makeErrorResponse(
+              request.id,
+              JSONRPC_ERROR_CODE.INTERNAL_ERROR,
+              'RecipeOrchestrator is not configured in this daemon instance.',
+            );
+          }
+          const projectId = params['projectId'];
+          const chatId = params['chatId'];
+          const cwd = params['cwd'];
+          const targetModelHandle = params['targetModelHandle'];
+          const goal = params['goal'];
+          const nextStep = params['nextStep'];
+          if (
+            typeof projectId !== 'string' ||
+            projectId.length === 0 ||
+            typeof chatId !== 'string' ||
+            chatId.length === 0 ||
+            typeof cwd !== 'string' ||
+            cwd.length === 0 ||
+            typeof targetModelHandle !== 'string' ||
+            targetModelHandle.length === 0 ||
+            typeof goal !== 'string' ||
+            goal.trim().length === 0 ||
+            typeof nextStep !== 'string' ||
+            nextStep.trim().length === 0
+          ) {
+            return makeErrorResponse(
+              request.id,
+              JSONRPC_ERROR_CODE.INVALID_PARAMS,
+              'handoff.relay requires projectId, chatId, cwd, targetModelHandle, goal, and nextStep.',
+            );
+          }
+          const decisionsRaw = params['decisions'];
+          const decisions = Array.isArray(decisionsRaw)
+            ? decisionsRaw.filter((d): d is string => typeof d === 'string')
+            : undefined;
+          const relayed = await this.recipeOrchestrator.relayHandoff({
+            projectId,
+            chatId,
+            cwd,
+            targetModelHandle,
+            goal,
+            decisions,
+            nextStep,
+            sourceModelHandle:
+              typeof params['sourceModelHandle'] === 'string'
+                ? params['sourceModelHandle']
+                : undefined,
+            latestTestOutput:
+              typeof params['latestTestOutput'] === 'string'
+                ? params['latestTestOutput']
+                : undefined,
+            reason: typeof params['reason'] === 'string' ? params['reason'] : undefined,
+          });
+          return makeSuccessResponse(request.id, relayed);
         }
 
         default:

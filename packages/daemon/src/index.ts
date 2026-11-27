@@ -53,6 +53,17 @@ export {
 } from './db/database.js';
 export { INITIAL_MIGRATIONS, type Migration } from './db/migrations.js';
 export {
+  buildHandoffMarkdown,
+  ensureOrchdeckExcluded,
+  writeHandoffPacket,
+  type WrittenHandoffPacket,
+} from './fusion/handoff-builder.js';
+export {
+  RecipeOrchestrator,
+  reviewRequestsChanges,
+  type RecipeOrchestratorOptions,
+} from './fusion/recipe-orchestrator.js';
+export {
   GitService,
   assertPathInsideRepo,
   tokenizeSafeCommand,

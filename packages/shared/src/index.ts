@@ -64,6 +64,8 @@ export {
   type DaemonPingParams,
   type DaemonPingResult,
   type EmptyParams,
+  type HandoffRelayParams,
+  type HandoffRelayResult,
   type JsonRpcErrorCode,
   type JsonRpcErrorObject,
   type JsonRpcErrorResponse,
@@ -91,6 +93,17 @@ export {
   type ProjectsListResult,
   type ProjectsUpdateParams,
   type ProjectsUpdateResult,
+  type RecipeCreateParams,
+  type RecipeCreateResult,
+  type RecipeDeleteParams,
+  type RecipeDeleteResult,
+  type RecipeRunGetParams,
+  type RecipeRunGetResult,
+  type RecipeRunStartParams,
+  type RecipeRunStartResult,
+  type RecipeUpdateParams,
+  type RecipeUpdateResult,
+  type RecipesListResult,
   type TaskRunActionParams,
   type TaskRunActionResult,
   type TaskRunGetResult,
@@ -113,6 +126,19 @@ export {
   type UsageSummaryResult,
   type UsageWindowBucket,
 } from './task-run.js';
+
+export {
+  INLINE_MENTION_ALIASES,
+  parseInlineMention,
+  type HandoffPacketInput,
+  type ParsedInlineMention,
+  type RecipeRecord,
+  type RecipeRunRecord,
+  type RecipeRunStatus,
+  type RecipeRunUpdatedNotificationParams,
+  type RecipeStepLogEntry,
+  type RecipeStepStage,
+} from './fusion.js';
 
 export { redactSecrets } from './secret-redactor.js';
 export { CO_AUTHOR_TRAILER_REGEX, DEFAULT_BLOCKED_BILLING_KEYS } from './security.js';

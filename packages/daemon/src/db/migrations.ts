@@ -69,4 +69,23 @@ export const INITIAL_MIGRATIONS: readonly Migration[] = [
         ON messages(chat_id, created_at ASC);
     `,
   },
+  {
+    version: 3,
+    name: 'fusion_recipes',
+    sql: `
+      CREATE TABLE IF NOT EXISTS recipes (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        description TEXT NOT NULL,
+        planner_model TEXT NOT NULL,
+        builder_model TEXT NOT NULL,
+        reviewer_model TEXT NOT NULL,
+        fallback_model TEXT,
+        max_review_retries INTEGER NOT NULL DEFAULT 2,
+        is_builtin INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+    `,
+  },
 ];

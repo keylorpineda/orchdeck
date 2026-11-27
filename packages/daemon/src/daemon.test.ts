@@ -68,7 +68,7 @@ describe('Core Daemon IPC and SQLite WAL', () => {
     const health = await client.call('daemon.health', {});
     expect(health.status).toBe('ok');
     expect(health.sqliteJournalMode).toBe('wal');
-    expect(health.schemaVersion).toBe(2);
+    expect(health.schemaVersion).toBeGreaterThanOrEqual(3);
 
     const ping = await client.call('daemon.ping', { nonce: 'abc' });
     expect(ping.pong).toBe(true);
