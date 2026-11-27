@@ -2,24 +2,24 @@ export type UiLocale = 'en' | 'es';
 
 export const LOCALE_STORAGE_KEY = 'orchdeck.locale';
 
-export type ZompoMoodState = 'idle' | 'working' | 'waiting' | 'committed';
+export type OrsoMoodState = 'idle' | 'typing' | 'working' | 'waiting' | 'committed';
 
-export const ZOMPO_WORKING_PHRASES: Readonly<Record<UiLocale, readonly string[]>> = {
+export const ORSO_WORKING_PHRASES: Readonly<Record<UiLocale, readonly string[]>> = {
   en: [
-    'Zompo is cooking...',
-    'Zompo is hauling diffs...',
-    'Zompo is brewing a patch...',
-    'Zompo is slicing the diff...',
-    'Zompo is guarding main...',
-    'Zompo is charting the trail...',
+    'Orso is hammering out a clean diff...',
+    'Orso is typing across modules...',
+    'Orso is drafting tests and types...',
+    'Orso is reviewing the AST...',
+    'Orso is guarding main...',
+    'Orso is brewing a verified patch...',
   ],
   es: [
-    'Zompo está cocinando...',
-    'Zompo está jalando diffs...',
-    'Zompo está chorreando un patch...',
-    'Zompo está cortando el diff...',
-    'Zompo está cuidando main...',
-    'Zompo está trazando la ruta...',
+    'Orso está picando un diff limpio...',
+    'Orso está tecleando entre módulos...',
+    'Orso está preparando pruebas y tipos...',
+    'Orso está revisando el AST...',
+    'Orso está cuidando main...',
+    'Orso está armando un parche verificado...',
   ],
 };
 
@@ -49,9 +49,11 @@ export interface UiDictionary {
   readonly handOffAction: string;
   readonly isolateWorktree: string;
   readonly removeWorktree: string;
-  readonly zompoIdle: string;
-  readonly zompoWaiting: string;
-  readonly zompoCommitted: string;
+  readonly orsoIdle: string;
+  readonly orsoTyping: string;
+  readonly orsoWaiting: string;
+  readonly orsoCommitted: string;
+  readonly orsoWaving: string;
   readonly inspectorTitle: string;
   readonly pluginsTab: string;
   readonly memoryTab: string;
@@ -75,6 +77,18 @@ export interface UiDictionary {
   readonly recommendedLabel: string;
   readonly useSuggested: string;
   readonly taskTagLabel: string;
+  readonly splashBooting: string;
+  readonly splashCheckingDaemon: string;
+  readonly splashReady: string;
+  readonly welcomeTitle: string;
+  readonly welcomeSubtitle: string;
+  readonly welcomeLinkCta: string;
+  readonly welcomeCap1Title: string;
+  readonly welcomeCap1Desc: string;
+  readonly welcomeCap2Title: string;
+  readonly welcomeCap2Desc: string;
+  readonly welcomeCap3Title: string;
+  readonly welcomeCap3Desc: string;
 }
 
 const DICTIONARIES: Readonly<Record<UiLocale, UiDictionary>> = {
@@ -104,9 +118,11 @@ const DICTIONARIES: Readonly<Record<UiLocale, UiDictionary>> = {
     handOffAction: 'Hand Off',
     isolateWorktree: 'Isolate in Worktree',
     removeWorktree: 'Remove Worktree',
-    zompoIdle: 'Zompo is keeping watch on the deck.',
-    zompoWaiting: 'Zompo awaits your sign-off.',
-    zompoCommitted: 'Zompo stacked a clean commit on branch.',
+    orsoIdle: 'Orso is keeping watch with fresh coffee.',
+    orsoTyping: 'Orso is typing along with you.',
+    orsoWaiting: 'Orso awaits your plan sign-off.',
+    orsoCommitted: 'Orso stacked a verified commit.',
+    orsoWaving: 'Ready to ship code!',
     inspectorTitle: 'Inspector',
     pluginsTab: 'Plugins & MCP',
     memoryTab: 'Memory',
@@ -130,6 +146,19 @@ const DICTIONARIES: Readonly<Record<UiLocale, UiDictionary>> = {
     recommendedLabel: 'Suggested',
     useSuggested: 'Use',
     taskTagLabel: 'Task',
+    splashBooting: 'Waking up Orso and local engines...',
+    splashCheckingDaemon: 'Connecting local orchestration daemon',
+    splashReady: 'Deck ready',
+    welcomeTitle: 'Orso is ready at the workbench.',
+    welcomeSubtitle:
+      'Link a local Git repository to orchestrate Claude Code, Codex CLI, and Antigravity side-by-side with safe worktree isolation.',
+    welcomeLinkCta: 'Link Local Git Repository',
+    welcomeCap1Title: 'Protected Main Branch',
+    welcomeCap1Desc: 'Every write runs on an isolated branch or worktree with diff review.',
+    welcomeCap2Title: 'Multi-Engine Handoff',
+    welcomeCap2Desc: 'Route tasks and get cross-engine second opinions in seconds.',
+    welcomeCap3Title: 'Project Memory & MCP',
+    welcomeCap3Desc: 'Persistent architecture conventions and gated local MCP tools.',
   },
   es: {
     send: 'Enviar',
@@ -157,9 +186,11 @@ const DICTIONARIES: Readonly<Record<UiLocale, UiDictionary>> = {
     handOffAction: 'Relevar',
     isolateWorktree: 'Aislar en Worktree',
     removeWorktree: 'Quitar Worktree',
-    zompoIdle: 'Zompo está vigilando la mesa.',
-    zompoWaiting: 'Zompo espera tu visto bueno.',
-    zompoCommitted: 'Zompo apiló un commit limpio en la rama.',
+    orsoIdle: 'Orso vigila la mesa con café recién hecho.',
+    orsoTyping: 'Orso teclea a la par tuya.',
+    orsoWaiting: 'Orso espera tu visto bueno.',
+    orsoCommitted: 'Orso apiló un commit verificado.',
+    orsoWaving: '¡Listo para programar!',
     inspectorTitle: 'Inspector',
     pluginsTab: 'Plugins y MCP',
     memoryTab: 'Memoria',
@@ -183,6 +214,19 @@ const DICTIONARIES: Readonly<Record<UiLocale, UiDictionary>> = {
     recommendedLabel: 'Sugerido',
     useSuggested: 'Usar',
     taskTagLabel: 'Tarea',
+    splashBooting: 'Despertando a Orso y los motores locales...',
+    splashCheckingDaemon: 'Conectando daemon local de orquestación',
+    splashReady: 'Mesa lista',
+    welcomeTitle: 'Orso ya está listo en tu mesa de trabajo.',
+    welcomeSubtitle:
+      'Vincula un repositorio Git local para orquestar Claude Code, Codex CLI y Antigravity juntos con aislamiento seguro en worktrees.',
+    welcomeLinkCta: 'Vincular Repositorio Git Local',
+    welcomeCap1Title: 'Rama Main Protegida',
+    welcomeCap1Desc: 'Cada cambio corre en rama o worktree aislado con revisión de diff.',
+    welcomeCap2Title: 'Relevo Multi-Motor',
+    welcomeCap2Desc: 'Asigna tareas y pide segundas opiniones entre motores en segundos.',
+    welcomeCap3Title: 'Memoria y MCP Local',
+    welcomeCap3Desc: 'Convenciones persistentes del proyecto y herramientas MCP aprobadas.',
   },
 };
 
@@ -194,23 +238,25 @@ export function getUiDictionary(locale: UiLocale): UiDictionary {
   return DICTIONARIES[locale];
 }
 
-export function getZompoStatusPhrase(
+export function getOrsoStatusPhrase(
   locale: UiLocale,
-  mood: ZompoMoodState,
+  mood: OrsoMoodState,
   frameIndex: number,
 ): string {
   const dict = DICTIONARIES[locale];
   switch (mood) {
     case 'idle':
-      return dict.zompoIdle;
+      return dict.orsoIdle;
+    case 'typing':
+      return dict.orsoTyping;
     case 'waiting':
-      return dict.zompoWaiting;
+      return dict.orsoWaiting;
     case 'committed':
-      return dict.zompoCommitted;
+      return dict.orsoCommitted;
     case 'working': {
-      const phrases = ZOMPO_WORKING_PHRASES[locale];
+      const phrases = ORSO_WORKING_PHRASES[locale];
       const normalizedIdx = ((frameIndex % phrases.length) + phrases.length) % phrases.length;
-      return phrases[normalizedIdx] ?? phrases[0] ?? dict.zompoIdle;
+      return phrases[normalizedIdx] ?? phrases[0] ?? dict.orsoIdle;
     }
   }
 }

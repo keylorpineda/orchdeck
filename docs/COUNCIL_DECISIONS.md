@@ -80,3 +80,13 @@ Convened through a 3-advisor Council (Systems Architect, Staff Product Designer,
 - Maps directly onto Orchdeck's palette and core **Change Card** metaphor: shaded vermilion chitin (`--zompo-shell-hi/mid/deep`), dorsal pronotal spines, curved articulated legs, glossy eye, and a Costa Rican serrated leaf with veined chlorophyll gradient (`--zompo-leaf-hi/mid/deep/vein`).
 - Rendered as a lifelike, anatomically sculpted `64x52` SVG with smooth GPU-accelerated animations (alternating tripod stride gait while working, independent elbowed antenna sensing sweep, periodic natural eye blink, overhead leaf inertia sway, and `prefers-reduced-motion` support) paired with subtle architectural pixel-art details (`PixelGlyph`, `.pixel-rule`, `.pixel-frame`, and `PixelStepTrack`) — zero anxious Tailwind bounce/pulse effects.
 - Bilingual (`EN` / `ES`) working phrases reflect authentic software craft and subtle Costa Rican idioms (`"Zompo está cocinando..."`, `"Zompo está jalando diffs..."`, `"Zompo está chorreando un patch..."`).
+
+---
+
+## 4. Mascot & Motion Evolution Addendum: **Orso** (Bear Engineer)
+
+Following live desktop visual evaluation, the mascot and motion language evolved from the initial leafcutter ant (`Zompo`) to **Orso**, a richly textured craftsman bear engineer rendered in custom SVG (`OrsoMascot`) with:
+- Procedural SVG fur and sweater knit textures (`<feTurbulence>` noise filter + SVG knit `<pattern>`) calibrated across both *Paper & Ink* and *Graphite & Vermilion*.
+- Direct workstation choreography: articulated paws typing across depressing glowing mechanical keys (`typing` / `working` moods), steaming ceramic mug, periodic eye blink, ear wiggle, celebratory commit pose (`committed`), and interactive click-to-wave.
+- Editorial boot `SplashScreen`, smooth CSS drawer/sidebar width+opacity transitions (`.orch-panel-slide`), popover/card entrances (`.orch-popover`, `.orch-enter`), tactile buttons (`.orch-btn`), and live keystroke reactivity.
+

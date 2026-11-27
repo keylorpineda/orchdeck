@@ -83,7 +83,7 @@ export function UsageQuotaRadar({
         <div
           role="dialog"
           aria-label="Usage & Quota Telemetry"
-          className="surface-card absolute top-[calc(100%+6px)] right-0 z-30 w-[380px] overflow-hidden shadow-sm"
+          className="surface-elevated orch-popover absolute top-[calc(100%+6px)] right-0 z-30 w-[380px] overflow-hidden"
         >
           <div className="flex items-center justify-between border-b border-border-subtle bg-inset px-3 py-2 text-[11.5px]">
             <span className="font-medium text-ink">Honest Usage & Quota Radar</span>

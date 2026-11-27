@@ -90,7 +90,7 @@ export function ModelPicker({
         <div
           role="listbox"
           aria-label="Engine and model selection"
-          className="surface-card absolute bottom-full left-0 z-30 mb-1.5 w-[290px] p-2 shadow-sm"
+          className="surface-elevated orch-popover absolute bottom-full left-0 z-30 mb-1.5 w-[290px] p-2"
         >
           <div className="mb-2 flex items-center justify-between border-b border-border-subtle pb-1.5 text-[11px]">
             <div className="flex items-center gap-1">
