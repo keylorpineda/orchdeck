@@ -5,6 +5,7 @@ import {
   Check,
   ChatCircleText,
   Flask,
+  GitMerge,
   Trash,
 } from '@phosphor-icons/react';
 import { useState, type KeyboardEvent } from 'react';
@@ -14,6 +15,7 @@ import { ShikiDiffView } from './ShikiDiffView';
 
 export interface ChangeCardProps {
   readonly branchName: string | null;
+  readonly defaultBranch?: string | undefined;
   readonly testCommand: string | null;
   readonly snapshot: ChangeCardSnapshot | null;
   readonly testResult: TestRunResult | null;
@@ -21,12 +23,14 @@ export interface ChangeCardProps {
   readonly runningTests: boolean;
   readonly committing: boolean;
   readonly discarding: boolean;
+  readonly integrating?: boolean | undefined;
   readonly errorMessage: string | null;
   readonly lastNotice: string | null;
   readonly onRefresh: () => Promise<void>;
   readonly onRunTests: () => Promise<void>;
   readonly onApprove: (commitMessage: string) => Promise<void>;
   readonly onDiscard: () => Promise<void>;
+  readonly onIntegrateBranch?: () => Promise<void>;
   readonly onRequestChanges: (contextSummary: string) => void;
 }
 
@@ -60,6 +64,7 @@ function statusColorClass(status: ChangeFileStatus): string {
 
 export function ChangeCard({
   branchName,
+  defaultBranch = 'main',
   testCommand,
   snapshot,
   testResult,
@@ -67,12 +72,14 @@ export function ChangeCard({
   runningTests,
   committing,
   discarding,
+  integrating = false,
   errorMessage,
   lastNotice,
   onRefresh,
   onRunTests,
   onApprove,
   onDiscard,
+  onIntegrateBranch,
   onRequestChanges,
 }: ChangeCardProps) {
   const [expandedFiles, setExpandedFiles] = useState<Readonly<Record<string, boolean>>>({});
@@ -374,6 +381,24 @@ export function ChangeCard({
             </div>
           </div>
         </>
+      ) : onIntegrateBranch &&
+        activeBranch !== defaultBranch &&
+        activeBranch.startsWith('agent/') ? (
+        <div className="flex items-center justify-between gap-2 bg-inset px-3 py-2 text-[12px]">
+          <span className="text-ink-secondary">
+            Task branch <span className="tabular-mono font-medium text-ink">{activeBranch}</span>{' '}
+            is clean and ready for human sign-off.
+          </span>
+          <button
+            type="button"
+            disabled={integrating}
+            onClick={() => void onIntegrateBranch()}
+            className="orch-transition inline-flex items-center gap-1.5 rounded-[6px] border border-accent bg-accent px-2.5 py-1 text-[11.5px] font-medium text-surface hover:border-accent-hover hover:bg-accent-hover disabled:opacity-50"
+          >
+            <GitMerge size={13} weight="regular" />
+            {integrating ? 'Integrating...' : `Integrate into ${defaultBranch}`}
+          </button>
+        </div>
       ) : null}
     </section>
   );

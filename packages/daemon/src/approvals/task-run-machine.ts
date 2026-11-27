@@ -6,15 +6,15 @@ import type {
   TurnEventNotificationParams,
 } from '@orchdeck/shared';
 import type { TurnRunner } from '../adapters/turn-runner.js';
-import type { GitService } from '../git/git-service.js';
+import type { GitService, WorkingTreeBaseline } from '../git/git-service.js';
 
 export const ALLOWED_TASK_RUN_TRANSITIONS: Readonly<Record<TaskRunState, readonly TaskRunState[]>> = {
   IDLE: ['PLANNING', 'PREPARING_BRANCH'],
   PLANNING: ['AWAITING_PLAN_APPROVAL', 'DISCARDED'],
   AWAITING_PLAN_APPROVAL: ['PREPARING_BRANCH', 'DISCARDED'],
   PREPARING_BRANCH: ['EXECUTING', 'DISCARDED'],
-  EXECUTING: ['VERIFYING', 'AWAITING_FINAL_REVIEW', 'DISCARDED'],
-  VERIFYING: ['AWAITING_FINAL_REVIEW', 'EXECUTING', 'DISCARDED'],
+  EXECUTING: ['VERIFYING', 'AWAITING_FINAL_REVIEW', 'COMMITTED_ON_BRANCH', 'DISCARDED'],
+  VERIFYING: ['AWAITING_FINAL_REVIEW', 'COMMITTED_ON_BRANCH', 'EXECUTING', 'DISCARDED'],
   AWAITING_FINAL_REVIEW: ['COMMITTED_ON_BRANCH', 'EXECUTING', 'DISCARDED'],
   COMMITTED_ON_BRANCH: [],
   DISCARDED: [],
@@ -43,6 +43,7 @@ export interface TaskRunOrchestratorOptions {
 interface InternalRunState {
   record: TaskRunRecord;
   planBuffer: string;
+  baseline: WorkingTreeBaseline | null;
 }
 
 export class TaskRunOrchestrator {
@@ -74,7 +75,10 @@ export class TaskRunOrchestrator {
     entry: InternalRunState,
     nextState: TaskRunState,
     patch: Partial<
-      Pick<TaskRunRecord, 'branchName' | 'activeTurnId' | 'planText' | 'errorMessage'>
+      Pick<
+        TaskRunRecord,
+        'branchName' | 'activeTurnId' | 'planText' | 'commitSha' | 'roleViolationDetected' | 'errorMessage'
+      >
     > = {},
   ): TaskRunRecord {
     const currentState = entry.record.state;
@@ -117,33 +121,82 @@ export class TaskRunOrchestrator {
     this.runByTurnId.delete(notification.turnId);
 
     if (entry.record.state === 'PLANNING') {
-      if (event.outcome === 'completed') {
-        const planText = entry.planBuffer.trim() || 'Plan generated cleanly.';
-        this.transition(entry, 'AWAITING_PLAN_APPROVAL', {
-          activeTurnId: null,
-          planText,
-        });
-      } else {
-        this.transition(entry, 'DISCARDED', {
-          activeTurnId: null,
-          errorMessage: `Planning turn ended with outcome: ${event.outcome}.`,
-        });
-      }
+      void this.finalizePlanningTurn(entry, event.outcome);
       return;
     }
 
     if (entry.record.state === 'EXECUTING') {
-      if (event.outcome === 'completed') {
-        this.transition(entry, 'AWAITING_FINAL_REVIEW', {
-          activeTurnId: null,
-        });
-      } else {
+      void this.finalizeExecutingTurn(entry, event.outcome);
+    }
+  }
+
+  private async finalizePlanningTurn(
+    entry: InternalRunState,
+    outcome: 'completed' | 'cancelled' | 'rate_limited' | 'error',
+  ): Promise<void> {
+    if (entry.baseline && (await this.gitService.isGitRepository(entry.record.cwd))) {
+      const guard = await this.gitService.verifyAndRevertReadOnlyTurn(
+        entry.record.cwd,
+        entry.baseline,
+      );
+      if (guard.violated) {
         this.transition(entry, 'DISCARDED', {
           activeTurnId: null,
-          errorMessage: `Execution turn ended with outcome: ${event.outcome}.`,
+          roleViolationDetected: true,
+          errorMessage: `Read-only Planner role attempted unauthorized modifications (${guard.touchedFiles.join(', ')}); changes were reverted cleanly.`,
         });
+        return;
       }
     }
+
+    if (outcome === 'completed') {
+      const planText = entry.planBuffer.trim() || 'Plan generated cleanly.';
+      this.transition(entry, 'AWAITING_PLAN_APPROVAL', {
+        activeTurnId: null,
+        planText,
+      });
+    } else {
+      this.transition(entry, 'DISCARDED', {
+        activeTurnId: null,
+        errorMessage: `Planning turn ended with outcome: ${outcome}.`,
+      });
+    }
+  }
+
+  private async finalizeExecutingTurn(
+    entry: InternalRunState,
+    outcome: 'completed' | 'cancelled' | 'rate_limited' | 'error',
+  ): Promise<void> {
+    if (outcome !== 'completed') {
+      this.transition(entry, 'DISCARDED', {
+        activeTurnId: null,
+        errorMessage: `Execution turn ended with outcome: ${outcome}.`,
+      });
+      return;
+    }
+
+    if (entry.record.mode === 'branch_pilot') {
+      const isGit = await this.gitService.isGitRepository(entry.record.cwd);
+      if (isGit) {
+        const status = await this.gitService.getStatus(entry.record.cwd);
+        if (!status.isClean) {
+          const slug = deriveBranchSlug(entry.record.prompt);
+          const commitSha = await this.gitService.commitApprovedChanges(
+            entry.record.cwd,
+            `feat(pilot): ${slug}`,
+          );
+          this.transition(entry, 'COMMITTED_ON_BRANCH', {
+            activeTurnId: null,
+            commitSha,
+          });
+          return;
+        }
+      }
+    }
+
+    this.transition(entry, 'AWAITING_FINAL_REVIEW', {
+      activeTurnId: null,
+    });
   }
 
   private async ensureIsolatedBranchIfGit(cwd: string, prompt: string): Promise<string | null> {
@@ -168,6 +221,8 @@ export class TaskRunOrchestrator {
       branchName: null,
       activeTurnId: null,
       planText: null,
+      commitSha: null,
+      roleViolationDetected: false,
       errorMessage: null,
       createdAt: now,
       updatedAt: now,
@@ -176,10 +231,15 @@ export class TaskRunOrchestrator {
     const entry: InternalRunState = {
       record: initialRecord,
       planBuffer: '',
+      baseline: null,
     };
     this.runs.set(initialRecord.id, entry);
 
     if (params.mode === 'plan' || params.mode === 'architect') {
+      if (await this.gitService.isGitRepository(params.cwd)) {
+        entry.baseline = await this.gitService.captureWorkingTreeBaseline(params.cwd);
+      }
+
       const turnId = crypto.randomUUID();
       this.runByTurnId.set(turnId, initialRecord.id);
       this.transition(entry, 'PLANNING', { activeTurnId: turnId });
@@ -264,7 +324,7 @@ export class TaskRunOrchestrator {
       );
     }
     if (entry.record.mode === 'plan') {
-      throw new Error('Read-only plan mode cannot transition into execution.');
+      throw new Error('Read-only plan mode cannot execute repository edits.');
     }
 
     this.transition(entry, 'PREPARING_BRANCH');

@@ -6,6 +6,8 @@ import type {
   ChangesApproveResult,
   ChangesDiscardResult,
   ChangesInspectResult,
+  ChangesIntegrateBranchParams,
+  ChangesIntegrateBranchResult,
   ChangesRunTestsResult,
   ChatsArchiveParams,
   ChatsArchiveResult,
@@ -40,6 +42,11 @@ import type {
   RecipeUpdateParams,
   RecipeUpdateResult,
   RecipesListResult,
+  SecondOpinionResolveParams,
+  SecondOpinionResolveResult,
+  SecondOpinionStartParams,
+  SecondOpinionStartResult,
+  SecondOpinionUpdatedNotificationParams,
   TaskRunActionResult,
   TaskRunStartParams,
   TaskRunStartResult,
@@ -89,9 +96,13 @@ export interface OrchdeckApi {
   deleteRecipe(id: string): Promise<RecipeDeleteResult>;
   runRecipe(params: RecipeRunStartParams): Promise<RecipeRunStartResult>;
   relayHandoff(params: HandoffRelayParams): Promise<HandoffRelayResult>;
+  integrateBranch(params: ChangesIntegrateBranchParams): Promise<ChangesIntegrateBranchResult>;
+  startSecondOpinion(params: SecondOpinionStartParams): Promise<SecondOpinionStartResult>;
+  resolveSecondOpinion(params: SecondOpinionResolveParams): Promise<SecondOpinionResolveResult>;
   onTurnEvent(listener: (event: TurnEventNotificationParams) => void): () => void;
   onTaskRunUpdated(listener: (event: TaskRunUpdatedNotificationParams) => void): () => void;
   onRecipeRunUpdated(listener: (event: RecipeRunUpdatedNotificationParams) => void): () => void;
+  onSecondOpinionUpdated(listener: (event: SecondOpinionUpdatedNotificationParams) => void): () => void;
 }
 
 declare global {

@@ -40,6 +40,8 @@ export {
   type ChangesDiscardResult,
   type ChangesInspectParams,
   type ChangesInspectResult,
+  type ChangesIntegrateBranchParams,
+  type ChangesIntegrateBranchResult,
   type ChangesRunTestsParams,
   type ChangesRunTestsResult,
   type ChatRecord,
@@ -104,6 +106,12 @@ export {
   type RecipeUpdateParams,
   type RecipeUpdateResult,
   type RecipesListResult,
+  type SecondOpinionGetParams,
+  type SecondOpinionGetResult,
+  type SecondOpinionResolveParams,
+  type SecondOpinionResolveResult,
+  type SecondOpinionStartParams,
+  type SecondOpinionStartResult,
   type TaskRunActionParams,
   type TaskRunActionResult,
   type TaskRunGetResult,
@@ -139,6 +147,14 @@ export {
   type RecipeStepLogEntry,
   type RecipeStepStage,
 } from './fusion.js';
+
+export type {
+  SecondOpinionColumn,
+  SecondOpinionColumnStatus,
+  SecondOpinionRecord,
+  SecondOpinionResolution,
+  SecondOpinionUpdatedNotificationParams,
+} from './second-opinion.js';
 
 export { redactSecrets } from './secret-redactor.js';
 export { CO_AUTHOR_TRAILER_REGEX, DEFAULT_BLOCKED_BILLING_KEYS } from './security.js';

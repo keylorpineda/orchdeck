@@ -8,6 +8,7 @@ import {
   type ChangeCardSnapshot,
   type ChangeFileStatus,
   type ChangedFileStat,
+  type ChangesIntegrateBranchResult,
   type TestRunResult,
 } from '@orchdeck/shared';
 import { spawnManagedProcess } from '../process/process-tree.js';
@@ -25,6 +26,17 @@ export interface GitStatusSummary {
   readonly staged: readonly string[];
   readonly unstaged: readonly string[];
   readonly untracked: readonly string[];
+}
+
+export interface WorkingTreeBaseline {
+  readonly diffDigest: string;
+  readonly statusFingerprint: string;
+  readonly untrackedFiles: readonly string[];
+}
+
+export interface ReadOnlyGuardResult {
+  readonly violated: boolean;
+  readonly touchedFiles: readonly string[];
 }
 
 export interface GitServiceOptions {
@@ -670,6 +682,134 @@ export class GitService {
       if (fs.existsSync(runtimeDir)) {
         fs.rmSync(runtimeDir, { recursive: true, force: true });
       }
+    }
+  }
+
+  async captureWorkingTreeBaseline(repoPath: string): Promise<WorkingTreeBaseline> {
+    const [status, porcelain, diffText] = await Promise.all([
+      this.getStatus(repoPath),
+      this.execGit(repoPath, ['status', '--porcelain=v1']),
+      this.hasHeadCommit(repoPath).then((hasHead) =>
+        hasHead ? this.execGit(repoPath, ['diff', 'HEAD']) : this.execGit(repoPath, ['diff', '--cached']),
+      ),
+    ]);
+    return {
+      diffDigest: diffText,
+      statusFingerprint: porcelain,
+      untrackedFiles: status.untracked,
+    };
+  }
+
+  async verifyAndRevertReadOnlyTurn(
+    repoPath: string,
+    baseline: WorkingTreeBaseline,
+  ): Promise<ReadOnlyGuardResult> {
+    const [status, porcelain, diffText] = await Promise.all([
+      this.getStatus(repoPath),
+      this.execGit(repoPath, ['status', '--porcelain=v1']),
+      this.hasHeadCommit(repoPath).then((hasHead) =>
+        hasHead ? this.execGit(repoPath, ['diff', 'HEAD']) : this.execGit(repoPath, ['diff', '--cached']),
+      ),
+    ]);
+
+    if (porcelain === baseline.statusFingerprint && diffText === baseline.diffDigest) {
+      return { violated: false, touchedFiles: [] };
+    }
+
+    const baselineUntracked = new Set(baseline.untrackedFiles);
+    const newUntracked = status.untracked.filter((item) => !baselineUntracked.has(item));
+    const touchedFiles = new Set<string>([
+      ...status.staged,
+      ...status.unstaged,
+      ...newUntracked,
+    ]);
+
+    const hasHead = await this.hasHeadCommit(repoPath);
+    if (hasHead) {
+      await this.execGit(repoPath, ['reset', '--quiet', 'HEAD']);
+      await this.execGit(repoPath, ['checkout', '--', '.']);
+    }
+
+    for (const relPath of newUntracked) {
+      const safePath = assertPathInsideRepo(repoPath, relPath);
+      if (fs.existsSync(safePath)) {
+        fs.rmSync(safePath, { recursive: true, force: true });
+      }
+    }
+
+    return {
+      violated: true,
+      touchedFiles: [...touchedFiles].sort(),
+    };
+  }
+
+  async integrateTaskBranch(
+    repoPath: string,
+    options: {
+      readonly targetBranch?: string | undefined;
+      readonly strategy?: 'merge' | 'squash' | undefined;
+      readonly commitMessage?: string | undefined;
+    } = {},
+  ): Promise<ChangesIntegrateBranchResult> {
+    const status = await this.getStatus(repoPath);
+    const sourceBranch = status.branch;
+    const targetBranch = options.targetBranch?.trim() || 'main';
+    const strategy = options.strategy ?? 'merge';
+
+    if (matchesProtectedBranch(sourceBranch, this.protectedBranches)) {
+      throw new Error(
+        `Already on protected branch "${sourceBranch}". Switch to an isolated task branch before integrating.`,
+      );
+    }
+
+    if (!status.isClean) {
+      throw new Error(
+        'Working tree has uncommitted changes. Approve & Commit or Discard changes before integrating into main.',
+      );
+    }
+
+    if (options.commitMessage && CO_AUTHOR_TRAILER_REGEX.test(options.commitMessage)) {
+      throw new Error('Integration commits must not include Co-Authored-By trailers.');
+    }
+
+    await this.execGit(repoPath, ['checkout', targetBranch]);
+
+    try {
+      if (strategy === 'squash') {
+        await this.execGit(repoPath, ['merge', '--squash', sourceBranch]);
+        const msg =
+          options.commitMessage?.trim() || `feat(integrate): squash integrate ${sourceBranch}`;
+        await this.execGitWithStdin(repoPath, ['commit', '-F', '-'], `${msg}\n`);
+      } else {
+        const msg =
+          options.commitMessage?.trim() || `feat(integrate): merge ${sourceBranch} into ${targetBranch}`;
+        await this.execGit(repoPath, ['merge', '--no-ff', '-m', msg, sourceBranch]);
+      }
+
+      const sha = (await this.execGit(repoPath, ['rev-parse', 'HEAD'])).trim();
+      return {
+        integrated: true,
+        targetBranch,
+        sourceBranch,
+        commitSha: sha,
+        conflictDetected: false,
+        message: `Integrated ${sourceBranch} cleanly into ${targetBranch} (${sha.slice(0, 7)}).`,
+      };
+    } catch {
+      try {
+        await this.execGit(repoPath, ['merge', '--abort']);
+      } catch {
+        await this.execGit(repoPath, ['reset', '--hard', 'HEAD']);
+      }
+      await this.execGit(repoPath, ['checkout', sourceBranch]);
+      return {
+        integrated: false,
+        targetBranch,
+        sourceBranch,
+        commitSha: null,
+        conflictDetected: true,
+        message: `Merge conflict integrating ${sourceBranch} into ${targetBranch}; aborted cleanly with task branch preserved.`,
+      };
     }
   }
 }

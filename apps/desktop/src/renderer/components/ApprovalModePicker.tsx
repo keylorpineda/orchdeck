@@ -1,15 +1,15 @@
 import { CaretUpDown, ShieldCheck } from '@phosphor-icons/react';
 import { useEffect, useState } from 'react';
+import type { ApprovalMode } from '@orchdeck/shared';
 import {
-  V01_APPROVAL_MODES,
+  ALL_APPROVAL_MODES,
   cycleV01ApprovalMode,
   getApprovalModeMeta,
-  type V01ApprovalMode,
 } from '../state/approval-mode';
 
 export interface ApprovalModePickerProps {
-  readonly mode: V01ApprovalMode;
-  readonly onChangeMode: (mode: V01ApprovalMode) => void;
+  readonly mode: ApprovalMode;
+  readonly onChangeMode: (mode: ApprovalMode) => void;
   readonly disabled?: boolean | undefined;
 }
 
@@ -35,9 +35,11 @@ export function ApprovalModePicker({ mode, onChangeMode, disabled }: ApprovalMod
   }, [disabled, mode, onChangeMode]);
 
   const badgeTone =
-    mode === 'express'
-      ? 'border-warn bg-warn-bg text-warn'
-      : 'border-border-subtle bg-inset text-ink-secondary';
+    mode === 'branch_pilot'
+      ? 'border-accent bg-accent-soft text-accent'
+      : mode === 'express'
+        ? 'border-warn bg-warn-bg text-warn'
+        : 'border-border-subtle bg-inset text-ink-secondary';
 
   return (
     <div className="relative">
@@ -58,10 +60,10 @@ export function ApprovalModePicker({ mode, onChangeMode, disabled }: ApprovalMod
         <div
           role="listbox"
           aria-label="Approval mode selector"
-          className="surface-card absolute bottom-[calc(100%+6px)] left-0 z-20 w-[300px] overflow-hidden shadow-sm"
+          className="surface-card absolute bottom-[calc(100%+6px)] left-0 z-20 w-[320px] overflow-hidden shadow-sm"
         >
           <div className="divide-y divide-border-subtle">
-            {V01_APPROVAL_MODES.map((candidate) => {
+            {ALL_APPROVAL_MODES.map((candidate) => {
               const meta = getApprovalModeMeta(candidate);
               const selected = candidate === mode;
               return (

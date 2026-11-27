@@ -11,6 +11,11 @@ import type {
   RecipeRunUpdatedNotificationParams,
 } from './fusion.js';
 import type {
+  SecondOpinionRecord,
+  SecondOpinionResolution,
+  SecondOpinionUpdatedNotificationParams,
+} from './second-opinion.js';
+import type {
   TaskRunRecord,
   TaskRunUpdatedNotificationParams,
   UsageSummaryResult,
@@ -415,6 +420,52 @@ export interface HandoffRelayResult {
   readonly targetModelHandle: string;
 }
 
+export interface ChangesIntegrateBranchParams {
+  readonly projectId: string;
+  readonly targetBranch?: string | undefined;
+  readonly strategy?: 'merge' | 'squash' | undefined;
+  readonly commitMessage?: string | undefined;
+}
+
+export interface ChangesIntegrateBranchResult {
+  readonly integrated: boolean;
+  readonly targetBranch: string;
+  readonly sourceBranch: string;
+  readonly commitSha: string | null;
+  readonly conflictDetected: boolean;
+  readonly message: string;
+}
+
+export interface SecondOpinionStartParams {
+  readonly projectId: string;
+  readonly chatId: string;
+  readonly cwd: string;
+  readonly prompt: string;
+  readonly modelAHandle: string;
+  readonly modelBHandle: string;
+}
+
+export interface SecondOpinionStartResult {
+  readonly secondOpinion: SecondOpinionRecord;
+}
+
+export interface SecondOpinionGetParams {
+  readonly secondOpinionId: string;
+}
+
+export interface SecondOpinionGetResult {
+  readonly secondOpinion: SecondOpinionRecord | null;
+}
+
+export interface SecondOpinionResolveParams {
+  readonly secondOpinionId: string;
+  readonly resolution: SecondOpinionResolution;
+}
+
+export interface SecondOpinionResolveResult {
+  readonly secondOpinion: SecondOpinionRecord;
+}
+
 export type EmptyParams = Record<string, never>;
 
 export interface DaemonMethodMap {
@@ -558,6 +609,22 @@ export interface DaemonMethodMap {
     params: HandoffRelayParams;
     result: HandoffRelayResult;
   };
+  'changes.integrateBranch': {
+    params: ChangesIntegrateBranchParams;
+    result: ChangesIntegrateBranchResult;
+  };
+  'secondOpinion.start': {
+    params: SecondOpinionStartParams;
+    result: SecondOpinionStartResult;
+  };
+  'secondOpinion.get': {
+    params: SecondOpinionGetParams;
+    result: SecondOpinionGetResult;
+  };
+  'secondOpinion.resolve': {
+    params: SecondOpinionResolveParams;
+    result: SecondOpinionResolveResult;
+  };
 }
 
 export type DaemonMethod = keyof DaemonMethodMap;
@@ -566,6 +633,7 @@ export interface DaemonNotificationMap {
   'turn.event': TurnEventNotificationParams;
   'taskRun.updated': TaskRunUpdatedNotificationParams;
   'recipeRun.updated': RecipeRunUpdatedNotificationParams;
+  'secondOpinion.updated': SecondOpinionUpdatedNotificationParams;
 }
 
 export type DaemonNotificationMethod = keyof DaemonNotificationMap;

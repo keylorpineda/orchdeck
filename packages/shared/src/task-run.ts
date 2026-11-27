@@ -26,6 +26,8 @@ export interface TaskRunRecord {
   readonly branchName: string | null;
   readonly activeTurnId: string | null;
   readonly planText: string | null;
+  readonly commitSha: string | null;
+  readonly roleViolationDetected: boolean;
   readonly errorMessage: string | null;
   readonly createdAt: string;
   readonly updatedAt: string;

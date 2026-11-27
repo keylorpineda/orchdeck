@@ -64,11 +64,17 @@ export {
   type RecipeOrchestratorOptions,
 } from './fusion/recipe-orchestrator.js';
 export {
+  SecondOpinionOrchestrator,
+  type SecondOpinionOrchestratorOptions,
+} from './fusion/second-opinion-orchestrator.js';
+export {
   GitService,
   assertPathInsideRepo,
   tokenizeSafeCommand,
   type GitServiceOptions,
   type GitStatusSummary,
+  type ReadOnlyGuardResult,
+  type WorkingTreeBaseline,
 } from './git/git-service.js';
 export {
   DaemonRpcClient,

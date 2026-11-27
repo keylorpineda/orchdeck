@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   parseInlineMention,
   parseModelHandle,
+  type ApprovalMode,
   type ChangeCardSnapshot,
   type ChatRecord,
   type MessageRecord,
@@ -10,6 +11,9 @@ import {
   type RecipeRecord,
   type RecipeRunRecord,
   type RecipeRunUpdatedNotificationParams,
+  type SecondOpinionRecord,
+  type SecondOpinionResolution,
+  type SecondOpinionUpdatedNotificationParams,
   type TaskRunRecord,
   type TaskRunUpdatedNotificationParams,
   type TestRunResult,
@@ -19,7 +23,6 @@ import { ChatWorkspace, type MessageTurnMeta } from './components/ChatWorkspace'
 import { ProjectSidebar } from './components/ProjectSidebar';
 import { ThemeProvider } from './components/ThemeProvider';
 import { WorkbenchShell } from './components/WorkbenchShell';
-import type { V01ApprovalMode } from './state/approval-mode';
 import {
   FALLBACK_MODEL_OPTIONS,
   applyTurnEventToDraft,
@@ -44,12 +47,14 @@ function WorkbenchApp() {
   const [modelOptions, setModelOptions] = useState<readonly ModelOption[]>(FALLBACK_MODEL_OPTIONS);
   const [chatModelHandle, setChatModelHandle] = useState('claude:opus-4-6:high');
   const [turnOverrideHandle, setTurnOverrideHandle] = useState<string | null>(null);
-  const [approvalMode, setApprovalMode] = useState<V01ApprovalMode>('architect');
+  const [approvalMode, setApprovalMode] = useState<ApprovalMode>('architect');
   const [activeTaskRun, setActiveTaskRun] = useState<TaskRunRecord | null>(null);
   const [planActionBusy, setPlanActionBusy] = useState(false);
   const [recipes, setRecipes] = useState<readonly RecipeRecord[]>([]);
   const [selectedRecipeId, setSelectedRecipeId] = useState<string | null>(null);
   const [activeRecipeRun, setActiveRecipeRun] = useState<RecipeRunRecord | null>(null);
+  const [activeSecondOpinion, setActiveSecondOpinion] = useState<SecondOpinionRecord | null>(null);
+  const [secondOpinionBusy, setSecondOpinionBusy] = useState(false);
   const [rateLimitBanner, setRateLimitBanner] = useState<string | null>(null);
   const [relayingHandoff, setRelayingHandoff] = useState(false);
   const [handoffNotice, setHandoffNotice] = useState<string | null>(null);
@@ -61,6 +66,7 @@ function WorkbenchApp() {
   const [runningTests, setRunningTests] = useState(false);
   const [committingChanges, setCommittingChanges] = useState(false);
   const [discardingChanges, setDiscardingChanges] = useState(false);
+  const [integratingBranch, setIntegratingBranch] = useState(false);
   const [changeError, setChangeError] = useState<string | null>(null);
   const [changeNotice, setChangeNotice] = useState<string | null>(null);
 
@@ -254,10 +260,17 @@ function WorkbenchApp() {
       }
     });
 
+    const unsubSecondOpinion = api.onSecondOpinionUpdated(
+      (payload: SecondOpinionUpdatedNotificationParams) => {
+        setActiveSecondOpinion(payload.secondOpinion);
+      },
+    );
+
     return () => {
       unsubTurn();
       unsubTaskRun();
       unsubRecipeRun();
+      unsubSecondOpinion();
     };
   }, [refreshChangeCard, refreshChatsForProject, selectedProjectId]);
 
@@ -654,6 +667,86 @@ function WorkbenchApp() {
     }
   };
 
+  const handleIntegrateBranch = async (): Promise<void> => {
+    const api = window.orchdeck;
+    const project = projects.find((p) => p.id === selectedProjectId) ?? null;
+    if (!api || !project) {
+      return;
+    }
+    setIntegratingBranch(true);
+    setChangeError(null);
+    setChangeNotice(null);
+    try {
+      const result = await api.integrateBranch({
+        projectId: project.id,
+        targetBranch: project.defaultBranch,
+        strategy: 'merge',
+      });
+      const [{ projects: refreshedProjects }] = await Promise.all([
+        api.listProjects(),
+        refreshChangeCard(project.id),
+      ]);
+      setProjects(refreshedProjects);
+      if (result.integrated) {
+        setChangeNotice(result.message);
+      } else {
+        setChangeError(result.message);
+      }
+    } catch (err) {
+      setChangeError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIntegratingBranch(false);
+    }
+  };
+
+  const handleStartSecondOpinion = async (
+    promptText: string,
+    modelBHandle: string,
+  ): Promise<void> => {
+    const api = window.orchdeck;
+    const project = projects.find((p) => p.id === selectedProjectId) ?? null;
+    if (!api || !project || !selectedChatId) {
+      return;
+    }
+    setSecondOpinionBusy(true);
+    try {
+      const modelAHandle = turnOverrideHandle ?? chatModelHandle;
+      const { secondOpinion } = await api.startSecondOpinion({
+        projectId: project.id,
+        chatId: selectedChatId,
+        cwd: project.rootPath,
+        prompt: promptText,
+        modelAHandle,
+        modelBHandle,
+      });
+      setActiveSecondOpinion(secondOpinion);
+    } finally {
+      setSecondOpinionBusy(false);
+    }
+  };
+
+  const handleResolveSecondOpinion = async (
+    secondOpinionId: string,
+    resolution: SecondOpinionResolution,
+    followUpPrompt: string,
+  ): Promise<void> => {
+    const api = window.orchdeck;
+    if (!api) {
+      return;
+    }
+    setSecondOpinionBusy(true);
+    try {
+      const { secondOpinion } = await api.resolveSecondOpinion({
+        secondOpinionId,
+        resolution,
+      });
+      setActiveSecondOpinion(secondOpinion);
+      await handleSendPrompt(followUpPrompt);
+    } finally {
+      setSecondOpinionBusy(false);
+    }
+  };
+
   const activeProject = projects.find((p) => p.id === selectedProjectId) ?? null;
   const activeChats = activeProject ? (chatsByProject[activeProject.id] ?? []) : [];
   const activeChat = activeChats.find((c) => c.id === selectedChatId) ?? null;
@@ -704,6 +797,8 @@ function WorkbenchApp() {
         recipes={recipes}
         selectedRecipeId={selectedRecipeId}
         activeRecipeRun={activeRecipeRun}
+        activeSecondOpinion={activeSecondOpinion}
+        secondOpinionBusy={secondOpinionBusy}
         rateLimitBanner={rateLimitBanner}
         relayingHandoff={relayingHandoff}
         handoffNotice={handoffNotice}
@@ -713,6 +808,7 @@ function WorkbenchApp() {
         runningTests={runningTests}
         committingChanges={committingChanges}
         discardingChanges={discardingChanges}
+        integratingBranch={integratingBranch}
         changeError={changeError}
         changeNotice={changeNotice}
         onChangeChatModel={setChatModelHandle}
@@ -722,6 +818,8 @@ function WorkbenchApp() {
         onCreateRecipe={handleCreateRecipe}
         onDeleteRecipe={handleDeleteRecipe}
         onRelayHandoff={handleRelayHandoff}
+        onStartSecondOpinion={handleStartSecondOpinion}
+        onResolveSecondOpinion={handleResolveSecondOpinion}
         onApprovePlan={handleApprovePlan}
         onRejectPlan={handleRejectPlan}
         onSendPrompt={handleSendPrompt}
@@ -731,6 +829,7 @@ function WorkbenchApp() {
         onRunTests={handleRunTests}
         onApproveChanges={handleApproveChanges}
         onDiscardChanges={handleDiscardChanges}
+        onIntegrateBranch={handleIntegrateBranch}
       />
     </WorkbenchShell>
   );
