@@ -67,7 +67,7 @@ export function WorkbenchShell({
             <SidebarSimple size={16} weight="regular" />
           </button>
           <span className="inline-flex items-center gap-2 font-semibold tracking-[-0.01em] text-ink">
-            <ZompoMascot mood="idle" size={18} />
+            <ZompoMascot mood="idle" size={28} />
             <span>Orchdeck</span>
           </span>
           {projectName ? (

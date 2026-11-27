@@ -77,6 +77,6 @@ Convened through a 3-advisor Council (Systems Architect, Staff Product Designer,
 
 **Why `Zompo` won:**
 - The Costa Rican *zompopa* (leafcutter ant) is nature's parallel multi-agent orchestrator: disciplined worker trails slicing precision pieces and carrying discrete payloads without jamming the main trail.
-- Maps directly onto Orchdeck's palette and core **Change Card** metaphor: a vermilion chassis (`--accent`) with slate-dark antennae (`--engine-antigravity` / `--text-primary`) hoisting a moss leaf-card (`--pass-text`).
-- Rendered exclusively from integer-snapped `16x14` SVG `<rect>` blocks (`shape-rendering: crispEdges`) paired with restrained editorial pixel-art details (stepped hairlines, corner tick frames, and an 8-block stepped work track — zero anxious bounce/pulse animations).
+- Maps directly onto Orchdeck's palette and core **Change Card** metaphor: shaded vermilion chitin (`--zompo-shell-hi/mid/deep`), dorsal pronotal spines, curved articulated legs, glossy eye, and a Costa Rican serrated leaf with veined chlorophyll gradient (`--zompo-leaf-hi/mid/deep/vein`).
+- Rendered as a lifelike, anatomically sculpted `64x52` SVG with smooth GPU-accelerated animations (alternating tripod stride gait while working, independent elbowed antenna sensing sweep, periodic natural eye blink, overhead leaf inertia sway, and `prefers-reduced-motion` support) paired with subtle architectural pixel-art details (`PixelGlyph`, `.pixel-rule`, `.pixel-frame`, and `PixelStepTrack`) — zero anxious Tailwind bounce/pulse effects.
 - Bilingual (`EN` / `ES`) working phrases reflect authentic software craft and subtle Costa Rican idioms (`"Zompo está cocinando..."`, `"Zompo está jalando diffs..."`, `"Zompo está chorreando un patch..."`).

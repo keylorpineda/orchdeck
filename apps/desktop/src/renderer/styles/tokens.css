@@ -23,6 +23,16 @@
   --engine-claude: #C46B48;
   --engine-codex: #3F7D68;
   --engine-antigravity: #55698F;
+  --zompo-shell-hi: #E36B4C;
+  --zompo-shell-mid: #C4492D;
+  --zompo-shell-deep: #7A2715;
+  --zompo-leg: #3A231B;
+  --zompo-eye: #181412;
+  --zompo-leaf-hi: #48976B;
+  --zompo-leaf-mid: #266644;
+  --zompo-leaf-deep: #17442C;
+  --zompo-leaf-vein: #BFE4CE;
+  --zompo-shadow: rgba(27, 25, 22, 0.16);
 }
 
 [data-theme='dark'] {
@@ -49,4 +59,14 @@
   --engine-claude: #C46B48;
   --engine-codex: #3F7D68;
   --engine-antigravity: #55698F;
+  --zompo-shell-hi: #F18B6E;
+  --zompo-shell-mid: #DF684B;
+  --zompo-shell-deep: #8C331E;
+  --zompo-leg: #B89A8B;
+  --zompo-eye: #14110F;
+  --zompo-leaf-hi: #7ED4A2;
+  --zompo-leaf-mid: #4EA373;
+  --zompo-leaf-deep: #245B3D;
+  --zompo-leaf-vein: #D3F4E0;
+  --zompo-shadow: rgba(0, 0, 0, 0.42);
 }

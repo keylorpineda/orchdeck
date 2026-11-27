@@ -27,14 +27,14 @@ export function ZompoStatusStrip({ mood, detailLabel }: ZompoStatusStripProps) {
 
     const timer = setInterval(() => {
       setFrame((prev) => prev + 1);
-    }, 450);
+    }, 320);
     return () => {
       clearInterval(timer);
     };
   }, [mood]);
 
-  // Rotate bilingual cooking/working phrases smoothly every ~2.7s (every 6 stepped frames)
-  const phraseTick = Math.floor(frame / 6);
+  // Rotate bilingual cooking/working phrases smoothly every ~3.2s (every 10 track ticks)
+  const phraseTick = Math.floor(frame / 10);
   const phrase = getZompoStatusPhrase(locale, mood, phraseTick);
 
   return (
@@ -43,7 +43,7 @@ export function ZompoStatusStrip({ mood, detailLabel }: ZompoStatusStripProps) {
       aria-live="polite"
     >
       <div className="flex min-w-0 items-center gap-2.5">
-        <ZompoMascot mood={mood} frame={frame} size={24} />
+        <ZompoMascot mood={mood} frame={frame} size={38} />
         <div className="flex min-w-0 flex-col">
           <span className="truncate font-medium text-ink">{phrase}</span>
           {detailLabel ? (
