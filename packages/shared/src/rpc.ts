@@ -11,6 +11,15 @@ import type {
   RecipeRunUpdatedNotificationParams,
 } from './fusion.js';
 import type {
+  MetricsHeuristicsGetResult,
+  MetricsHeuristicsSetParams,
+  MetricsHeuristicsSetResult,
+  MetricsRecommendParams,
+  MetricsRecommendResult,
+  TaskMetricsRecordParams,
+  TaskMetricsRecordResult,
+} from './metrics.js';
+import type {
   MemoryDeleteParams,
   MemoryDeleteResult,
   MemoryImportDocParams,
@@ -770,6 +779,22 @@ export interface DaemonMethodMap {
   'memory.importDoc': {
     params: MemoryImportDocParams;
     result: MemoryImportDocResult;
+  };
+  'metrics.recordTask': {
+    params: TaskMetricsRecordParams;
+    result: TaskMetricsRecordResult;
+  };
+  'metrics.recommend': {
+    params: MetricsRecommendParams;
+    result: MetricsRecommendResult;
+  };
+  'metrics.getHeuristics': {
+    params: EmptyParams;
+    result: MetricsHeuristicsGetResult;
+  };
+  'metrics.setHeuristics': {
+    params: MetricsHeuristicsSetParams;
+    result: MetricsHeuristicsSetResult;
   };
 }
 

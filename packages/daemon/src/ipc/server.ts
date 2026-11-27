@@ -42,6 +42,12 @@ import {
   proposeMemoryFromChangeCard,
   syncMemoryToRepoDoc,
 } from '../memory/project-memory.js';
+import {
+  getRecommenderHeuristics,
+  isTaskTag,
+  recommendModelForTask,
+  setRecommenderHeuristics,
+} from '../metrics/recommender.js';
 import { PluginInspector } from '../plugins/plugin-inspector.js';
 import { ProviderCooldownTracker, buildUsageSummaryWithRadar } from '../usage/quota-radar.js';
 
@@ -1638,6 +1644,101 @@ export class DaemonRpcServer {
             target,
             importedCount: entries.length,
             entries,
+          });
+        }
+
+        case 'metrics.recordTask': {
+          const projectId = params['projectId'];
+          const tag = params['tag'];
+          const modelHandle = params['modelHandle'];
+          const recipeId = params['recipeId'];
+          const approvedFirstPass = params['approvedFirstPass'];
+          const iterations = params['iterations'];
+          const durationMs = params['durationMs'];
+          if (
+            typeof projectId !== 'string' ||
+            projectId.length === 0 ||
+            !isTaskTag(tag) ||
+            typeof modelHandle !== 'string' ||
+            modelHandle.length === 0 ||
+            typeof approvedFirstPass !== 'boolean'
+          ) {
+            return makeErrorResponse(
+              request.id,
+              JSONRPC_ERROR_CODE.INVALID_PARAMS,
+              'metrics.recordTask requires projectId, valid tag, modelHandle, and approvedFirstPass.',
+            );
+          }
+          const colonIdx = modelHandle.indexOf(':');
+          const prefix = colonIdx > 0 ? modelHandle.slice(0, colonIdx) : modelHandle;
+          const providerId: ProviderId = isProviderId(prefix) ? prefix : 'claude';
+          const metric = this.db.recordTaskMetric({
+            projectId,
+            tag,
+            providerId,
+            modelHandle,
+            recipeId: typeof recipeId === 'string' ? recipeId : null,
+            approvedFirstPass,
+            iterations: typeof iterations === 'number' ? iterations : 1,
+            durationMs: typeof durationMs === 'number' ? durationMs : 0,
+          });
+          return makeSuccessResponse(request.id, { metric });
+        }
+
+        case 'metrics.recommend': {
+          const projectId = params['projectId'];
+          const tag = params['tag'];
+          const prompt = params['prompt'];
+          const availableHandles = params['availableHandles'];
+          if (
+            typeof projectId !== 'string' ||
+            projectId.length === 0 ||
+            (tag !== undefined && !isTaskTag(tag))
+          ) {
+            return makeErrorResponse(
+              request.id,
+              JSONRPC_ERROR_CODE.INVALID_PARAMS,
+              'metrics.recommend requires projectId and optional valid tag.',
+            );
+          }
+          const handles = Array.isArray(availableHandles)
+            ? availableHandles.filter((h): h is string => typeof h === 'string')
+            : undefined;
+          const recommendation = recommendModelForTask({
+            db: this.db,
+            projectId,
+            tag,
+            prompt: typeof prompt === 'string' ? prompt : undefined,
+            availableHandles: handles,
+            cooldownTracker: this.cooldownTracker,
+          });
+          return makeSuccessResponse(request.id, { recommendation });
+        }
+
+        case 'metrics.getHeuristics': {
+          return makeSuccessResponse(request.id, {
+            heuristics: getRecommenderHeuristics(this.db),
+          });
+        }
+
+        case 'metrics.setHeuristics': {
+          const rawHeuristics = params['heuristics'];
+          if (!Array.isArray(rawHeuristics)) {
+            return makeErrorResponse(
+              request.id,
+              JSONRPC_ERROR_CODE.INVALID_PARAMS,
+              'metrics.setHeuristics requires heuristics array.',
+            );
+          }
+          const validated = rawHeuristics.filter(
+            (item): item is { tag: 'feature' | 'bugfix' | 'refactor' | 'test' | 'docs'; modelHandle: string; recipeId: string | null } =>
+              typeof item === 'object' &&
+              item !== null &&
+              isTaskTag((item as Record<string, unknown>)['tag']) &&
+              typeof (item as Record<string, unknown>)['modelHandle'] === 'string',
+          );
+          return makeSuccessResponse(request.id, {
+            heuristics: setRecommenderHeuristics(this.db, validated),
           });
         }
 

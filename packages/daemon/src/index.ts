@@ -98,6 +98,14 @@ export {
   proposeMemoryFromChangeCard,
   syncMemoryToRepoDoc,
 } from './memory/project-memory.js';
+export {
+  DEFAULT_HEURISTICS,
+  getRecommenderHeuristics,
+  inferTaskTag,
+  isTaskTag,
+  recommendModelForTask,
+  setRecommenderHeuristics,
+} from './metrics/recommender.js';
 export { PluginInspector, type PluginInspectorOptions } from './plugins/plugin-inspector.js';
 export {
   ProviderCooldownTracker,

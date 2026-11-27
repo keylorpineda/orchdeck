@@ -38,6 +38,11 @@ import type {
   MemorySyncDocResult,
   MemoryUpsertParams,
   MemoryUpsertResult,
+  MetricsHeuristicsGetResult,
+  MetricsHeuristicsSetParams,
+  MetricsHeuristicsSetResult,
+  MetricsRecommendParams,
+  MetricsRecommendResult,
   MessagesAppendParams,
   MessagesAppendResult,
   MessagesListResult,
@@ -68,6 +73,8 @@ import type {
   SecondOpinionUpdatedNotificationParams,
   SkillsToggleParams,
   SkillsToggleResult,
+  TaskMetricsRecordParams,
+  TaskMetricsRecordResult,
   TaskRunActionResult,
   TaskRunStartParams,
   TaskRunStartResult,
@@ -144,6 +151,10 @@ export interface OrchdeckApi {
   ): Promise<MemoryProposeFromChangeResult>;
   syncMemoryDoc(params: MemorySyncDocParams): Promise<MemorySyncDocResult>;
   importMemoryDoc(params: MemoryImportDocParams): Promise<MemoryImportDocResult>;
+  recordTaskMetric(params: TaskMetricsRecordParams): Promise<TaskMetricsRecordResult>;
+  recommendModel(params: MetricsRecommendParams): Promise<MetricsRecommendResult>;
+  getRecommenderHeuristics(): Promise<MetricsHeuristicsGetResult>;
+  setRecommenderHeuristics(params: MetricsHeuristicsSetParams): Promise<MetricsHeuristicsSetResult>;
   onMcpApprovalRequired(listener: (event: McpApprovalRequiredNotificationParams) => void): () => void;
   onTurnEvent(listener: (event: TurnEventNotificationParams) => void): () => void;
   onTaskRunUpdated(listener: (event: TaskRunUpdatedNotificationParams) => void): () => void;

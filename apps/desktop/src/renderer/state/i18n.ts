@@ -72,6 +72,9 @@ export interface UiDictionary {
   readonly memoryProposalTitle: string;
   readonly saveMemory: string;
   readonly dismiss: string;
+  readonly recommendedLabel: string;
+  readonly useSuggested: string;
+  readonly taskTagLabel: string;
 }
 
 const DICTIONARIES: Readonly<Record<UiLocale, UiDictionary>> = {
@@ -124,6 +127,9 @@ const DICTIONARIES: Readonly<Record<UiLocale, UiDictionary>> = {
     memoryProposalTitle: 'Save change decision to Project Memory?',
     saveMemory: 'Save to Memory',
     dismiss: 'Dismiss',
+    recommendedLabel: 'Suggested',
+    useSuggested: 'Use',
+    taskTagLabel: 'Task',
   },
   es: {
     send: 'Enviar',
@@ -174,6 +180,9 @@ const DICTIONARIES: Readonly<Record<UiLocale, UiDictionary>> = {
     memoryProposalTitle: '¿Guardar decisión del commit en Memoria?',
     saveMemory: 'Guardar en Memoria',
     dismiss: 'Descartar',
+    recommendedLabel: 'Sugerido',
+    useSuggested: 'Usar',
+    taskTagLabel: 'Tarea',
   },
 };
 

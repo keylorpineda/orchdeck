@@ -209,3 +209,20 @@ export type {
   MemoryUpsertResult,
   ProjectMemoryEntry,
 } from './memory.js';
+
+export { TASK_TAGS } from './metrics.js';
+export type {
+  MetricsHeuristicsGetResult,
+  MetricsHeuristicsSetParams,
+  MetricsHeuristicsSetResult,
+  MetricsRecommendParams,
+  MetricsRecommendResult,
+  ModelRecommendation,
+  RecommendationConfidence,
+  RecommendationHeuristic,
+  RecommendationSource,
+  TaskMetricRecord,
+  TaskMetricsRecordParams,
+  TaskMetricsRecordResult,
+  TaskTag,
+} from './metrics.js';

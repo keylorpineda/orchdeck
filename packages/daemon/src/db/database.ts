@@ -17,6 +17,8 @@ import {
   type RecipeCreateParams,
   type RecipeRecord,
   type RecipeUpdateParams,
+  type TaskMetricRecord,
+  type TaskTag,
   type UsageSummaryResult,
   type UsageWindowBucket,
 } from '@orchdeck/shared';
@@ -997,6 +999,106 @@ export class DaemonDatabase {
   deleteProjectMemory(id: string): boolean {
     const result = this.db.prepare('DELETE FROM project_memory WHERE id = ?').run(id);
     return Number(result.changes) > 0;
+  }
+
+  recordTaskMetric(input: {
+    readonly projectId: string;
+    readonly tag: TaskTag;
+    readonly providerId: ProviderId;
+    readonly modelHandle: string;
+    readonly recipeId?: string | null | undefined;
+    readonly approvedFirstPass: boolean;
+    readonly iterations: number;
+    readonly durationMs: number;
+  }): TaskMetricRecord {
+    const id = crypto.randomUUID();
+    const createdAt = new Date().toISOString();
+    const recipeId = input.recipeId ?? null;
+    const iterations = Math.max(1, Math.round(input.iterations));
+    const durationMs = Math.max(0, Math.round(input.durationMs));
+
+    this.db
+      .prepare(
+        `
+        INSERT INTO task_metrics (
+          id, project_id, tag, provider_id, model_handle, recipe_id,
+          approved_first_pass, iterations, duration_ms, created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+      )
+      .run(
+        id,
+        input.projectId,
+        input.tag,
+        input.providerId,
+        input.modelHandle,
+        recipeId,
+        input.approvedFirstPass ? 1 : 0,
+        iterations,
+        durationMs,
+        createdAt,
+      );
+
+    return {
+      id,
+      projectId: input.projectId,
+      tag: input.tag,
+      providerId: input.providerId,
+      modelHandle: input.modelHandle,
+      recipeId,
+      approvedFirstPass: input.approvedFirstPass,
+      iterations,
+      durationMs,
+      createdAt,
+    };
+  }
+
+  listTaskMetrics(projectId: string, tag?: TaskTag): TaskMetricRecord[] {
+    const sql = tag
+      ? `
+        SELECT id, project_id, tag, provider_id, model_handle, recipe_id,
+               approved_first_pass, iterations, duration_ms, created_at
+        FROM task_metrics
+        WHERE project_id = ? AND tag = ?
+        ORDER BY created_at DESC
+        `
+      : `
+        SELECT id, project_id, tag, provider_id, model_handle, recipe_id,
+               approved_first_pass, iterations, duration_ms, created_at
+        FROM task_metrics
+        WHERE project_id = ?
+        ORDER BY created_at DESC
+        `;
+    const rows = (tag
+      ? this.db.prepare(sql).all(projectId, tag)
+      : this.db.prepare(sql).all(projectId)) as Array<Record<string, unknown>>;
+
+    return rows.map((row) => {
+      const rawTag = String(row['tag']);
+      const safeTag: TaskTag =
+        rawTag === 'feature' ||
+        rawTag === 'bugfix' ||
+        rawTag === 'refactor' ||
+        rawTag === 'test' ||
+        rawTag === 'docs'
+          ? rawTag
+          : 'feature';
+      const rawProvider = String(row['provider_id']);
+      const providerId: ProviderId = isProviderId(rawProvider) ? rawProvider : 'claude';
+      return {
+        id: String(row['id']),
+        projectId: String(row['project_id']),
+        tag: safeTag,
+        providerId,
+        modelHandle: String(row['model_handle']),
+        recipeId: typeof row['recipe_id'] === 'string' ? row['recipe_id'] : null,
+        approvedFirstPass: Number(row['approved_first_pass']) === 1,
+        iterations: Number(row['iterations'] ?? 1),
+        durationMs: Number(row['duration_ms'] ?? 0),
+        createdAt: String(row['created_at']),
+      };
+    });
   }
 
   close(): void {

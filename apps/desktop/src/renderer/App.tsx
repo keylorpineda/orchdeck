@@ -13,6 +13,7 @@ import {
   type MemoryDocTarget,
   type MemoryProposal,
   type MessageRecord,
+  type ModelRecommendation,
   type ProjectMemoryEntry,
   type ProjectWithGitStatus,
   type RecipeCreateParams,
@@ -24,6 +25,7 @@ import {
   type SecondOpinionUpdatedNotificationParams,
   type TaskRunRecord,
   type TaskRunUpdatedNotificationParams,
+  type TaskTag,
   type TestRunResult,
   type TurnEventNotificationParams,
   type UsageSummaryResult,
@@ -95,6 +97,10 @@ function WorkbenchApp() {
   const [memoryError, setMemoryError] = useState<string | null>(null);
   const [memoryStatus, setMemoryStatus] = useState<string | null>(null);
   const [memoryProposal, setMemoryProposal] = useState<MemoryProposal | null>(null);
+  const [taskTag, setTaskTag] = useState<TaskTag>('feature');
+  const [recommendation, setRecommendation] = useState<ModelRecommendation | null>(null);
+  const taskStartedAtRef = useRef<number | null>(null);
+  const taskIterationsRef = useRef(0);
   const { dict } = useLanguage();
   const [changeError, setChangeError] = useState<string | null>(null);
   const [changeNotice, setChangeNotice] = useState<string | null>(null);
@@ -238,6 +244,28 @@ function WorkbenchApp() {
   useEffect(() => {
     void refreshInspector(selectedProjectId);
   }, [refreshInspector, selectedProjectId]);
+
+  const refreshRecommendation = useCallback(async (): Promise<void> => {
+    const api = window.orchdeck;
+    if (!api || !selectedProjectId) {
+      setRecommendation(null);
+      return;
+    }
+    try {
+      const { recommendation: rec } = await api.recommendModel({
+        projectId: selectedProjectId,
+        tag: taskTag,
+        availableHandles: modelOptions.map((m) => m.handle),
+      });
+      setRecommendation(rec);
+    } catch {
+      // Non-critical recommendation lookup
+    }
+  }, [modelOptions, selectedProjectId, taskTag]);
+
+  useEffect(() => {
+    void refreshRecommendation();
+  }, [refreshRecommendation, usageSummary]);
 
   useEffect(() => {
     const api = window.orchdeck;
@@ -545,6 +573,12 @@ function WorkbenchApp() {
     setRateLimitBanner(null);
     setHandoffNotice(null);
     setActiveTaskRun(null);
+    if (taskStartedAtRef.current === null) {
+      taskStartedAtRef.current = Date.now();
+      taskIterationsRef.current = 1;
+    } else {
+      taskIterationsRef.current += 1;
+    }
 
     const effectiveCwd = currentChat?.worktreePath ?? project.rootPath;
 
@@ -735,6 +769,22 @@ function WorkbenchApp() {
       ]);
       setProjects(refreshedProjects);
       setChangeNotice(`Committed ${commitSha.slice(0, 7)} cleanly on ${branch}.`);
+      const durationMs =
+        taskStartedAtRef.current !== null ? Math.max(0, Date.now() - taskStartedAtRef.current) : 0;
+      const iterations = Math.max(1, taskIterationsRef.current);
+      taskStartedAtRef.current = null;
+      taskIterationsRef.current = 0;
+      void api
+        .recordTaskMetric({
+          projectId: selectedProjectId,
+          tag: taskTag,
+          modelHandle: chatModelHandle,
+          recipeId: selectedRecipeId,
+          approvedFirstPass: iterations <= 1,
+          iterations,
+          durationMs,
+        })
+        .then(() => refreshRecommendation());
       try {
         const { proposal } = await api.proposeMemoryFromChange({
           projectId: selectedProjectId,
@@ -1174,6 +1224,9 @@ function WorkbenchApp() {
         worktreeBusy={worktreeBusy}
         changeError={changeError}
         changeNotice={changeNotice}
+        taskTag={taskTag}
+        recommendation={recommendation}
+        onChangeTaskTag={setTaskTag}
         onChangeChatModel={setChatModelHandle}
         onChangeTurnOverride={setTurnOverrideHandle}
         onChangeApprovalMode={setApprovalMode}
