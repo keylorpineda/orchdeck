@@ -1,18 +1,38 @@
 # Dependencies and build outputs
 node_modules/
+.pnpm-store/
 dist/
 out/
 release/
 .vite/
+coverage/
+*.tsbuildinfo
 
 # Local SQLite database files
 *.db
 *.db-wal
 *.db-shm
+*.sqlite
+*.sqlite3
 
 # Environment and secrets
 .env
 .env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+*.jks
+id_rsa
+id_ed25519
+secrets.*
+*.secret
+credentials.json
+auth.json
+local.settings.json
 
 # Internal orchestrator state (also excluded via .git/info/exclude in target repos)
 .orchdeck/

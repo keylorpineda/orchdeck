@@ -1,0 +1,32 @@
+{
+  "name": "orchdeck",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Desktop command deck to orchestrate Claude Code, Codex, and Antigravity together on local repositories.",
+  "packageManager": "pnpm@11.17.0",
+  "engines": {
+    "node": ">=24.0.0",
+    "pnpm": ">=11.0.0"
+  },
+  "scripts": {
+    "preinstall": "node scripts/enforce-pnpm.mjs",
+    "prepare": "husky",
+    "setup:git": "git config commit.template .gitmessage",
+    "lint:repo": "node scripts/check-repo-hygiene.mjs",
+    "lint:commits": "commitlint --from HEAD~1 --to HEAD",
+    "lint": "pnpm run lint:repo && pnpm -r --if-present lint",
+    "security:secrets": "node scripts/check-secrets.mjs",
+    "security:audit": "pnpm audit --audit-level=high",
+    "security:check": "pnpm run security:secrets && pnpm run security:audit",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "test": "pnpm -r --if-present test",
+    "build": "pnpm -r --if-present build"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^21.2.4",
+    "@commitlint/config-conventional": "^21.2.4",
+    "husky": "^9.1.7",
+    "yaml": "^2.9.1"
+  }
+}

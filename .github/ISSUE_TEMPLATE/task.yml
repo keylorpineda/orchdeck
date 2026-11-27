@@ -1,0 +1,73 @@
+name: Engineering Task
+description: Track planned architecture, spike, CI, tooling, or milestone implementation work.
+title: "[Task]: "
+labels: ["architecture"]
+body:
+  - type: textarea
+    id: objective
+    attributes:
+      label: Objective
+      description: Clear statement of the engineering outcome and why it is needed now.
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Context and References
+      description: Link relevant docs (ARCHITECTURE.md, DESIGN_SYSTEM.md, ROADMAP.md) and related or blocking issues.
+      placeholder: |
+        - Roadmap milestone: Phase 0 / v0.1
+        - References: docs/ARCHITECTURE.md section 2
+        - Depends on: #
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope and Deliverables
+      description: Concrete checklist of packages, files, tests, or documentation to deliver.
+      placeholder: |
+        - [ ] Deliverable 1
+        - [ ] Deliverable 2
+    validations:
+      required: true
+  - type: textarea
+    id: out_of_scope
+    attributes:
+      label: Out of Scope
+      description: Explicitly state what this task will not change to keep PRs focused.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Primary Area
+      options:
+        - Architecture / Core Foundations
+        - Desktop Shell / UI
+        - Core Daemon / SQLite
+        - Security / Guardrails / Approvals
+        - Provider Adapters
+        - Model Fusion / Handoff
+        - Plugins / Skills / MCP
+        - Usage / Telemetry
+        - CI / Repository Governance
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance_criteria
+    attributes:
+      label: Acceptance Criteria
+      description: Objective criteria that must pass before closing the issue.
+    validations:
+      required: true
+  - type: textarea
+    id: verification
+    attributes:
+      label: Verification Plan
+      description: Exact pnpm commands, contract tests, or manual checks required to verify completion.
+      placeholder: |
+        - pnpm run lint
+        - pnpm run typecheck
+        - pnpm run test
+        - pnpm run build
+    validations:
+      required: true

@@ -10,7 +10,7 @@ The following visual clichés are banned across the entire UI codebase:
 1. Neon purple/cyan/blue gradients (`from-indigo-500 to-purple-500`, `bg-clip-text`) and blue-tinted dark backgrounds (`#0B0F19`, `#0F172A`).
 2. Gratuitous glassmorphism (`backdrop-blur-xl` stacked over glowing orbs or halos).
 3. Padded bento-boxes with oversized tinted shadows (`shadow-purple-500/20`).
-4. Cliché AI icons (`✨`, `🚀`, `🧠`, magic wands) and generic unstyled `Lucide` icon defaults.
+4. Cliché AI icons (sparkles, rocket, brain, magic wands) and generic unstyled `Lucide` icon defaults.
 5. Anxious animations (pulsing rings, bouncing avatars, artificial typewriter delays).
 6. Pastel `rounded-full` pill soup scattered across every panel.
 7. Marketing empty states (*"What are we building today?"* with 4 identical prompt cards).

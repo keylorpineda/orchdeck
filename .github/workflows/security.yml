@@ -1,0 +1,42 @@
+name: Security
+
+on:
+  push:
+    branches:
+      - dev
+      - main
+  pull_request:
+    branches:
+      - dev
+      - main
+  schedule:
+    - cron: "0 6 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  secret-and-supply-chain:
+    name: Secret Scan and Dependency Audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies with pnpm
+        run: pnpm install --frozen-lockfile
+
+      - name: Scan for exposed secrets and forbidden sensitive files
+        run: pnpm run security:secrets
+
+      - name: Audit dependencies with pnpm
+        run: pnpm run security:audit

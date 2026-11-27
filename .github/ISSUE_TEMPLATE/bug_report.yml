@@ -1,34 +1,99 @@
 name: Bug Report
-description: Report a bug in the desktop app, Core Daemon, Git integration, or UI.
+description: Report a reproducible defect in the Electron desktop shell, Core Daemon, Git integration, or UI.
 title: "[Bug]: "
-labels: ["bug"]
+labels: ["bug", "needs-triage"]
 body:
-  - type: textarea
-    id: description
+  - type: markdown
     attributes:
-      label: Problem Description
-      description: What happened and what did you expect instead?
+      value: |
+        Please describe the defect precisely in English. Never include API keys, auth tokens, or private repository secrets.
+        Do not include emojis in issue titles or descriptions.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Technical Summary
+      description: Concise, high-signal explanation of what failed and under which conditions.
+      placeholder: "Core Daemon fails to revert working tree changes after a read-only Reviewer turn modifies tracked files."
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Primary Area
+      options:
+        - Desktop Shell / Electron
+        - Core Daemon / SQLite / JSON-RPC
+        - GitService / Git Shim / Worktrees
+        - Approval Modes / Security Guardrails
+        - UI / Change Cards / Design System
+        - Model Fusion / Recipes / Handoff
+        - Plugins / Skills / Local MCP Hub
+        - Usage & Quota Radar
+        - CI / Build / Tooling
+    validations:
+      required: true
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      options:
+        - P0 - Critical / Blocking (data loss, security invariant breach, or crash)
+        - P1 - High (major workflow broken with no reasonable workaround)
+        - P2 - Medium (degraded behavior with workaround)
+        - P3 - Low (minor visual or ergonomic defect)
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Include OS version, Orchdeck version or commit SHA, Node.js version, pnpm version, and relevant CLI versions.
+      placeholder: |
+        - OS: Windows 11 24H2 / macOS 15.x
+        - Orchdeck Commit / Version: dev@<sha>
+        - Node.js / pnpm: v24.18.0 / 11.17.0
+        - CLI Versions (if applicable): claude x.y.z / codex x.y.z / agy x.y.z
     validations:
       required: true
   - type: textarea
     id: steps
     attributes:
       label: Steps to Reproduce
+      description: Numbered, deterministic steps starting from a clean project or branch state.
       placeholder: |
-        1. Open project...
-        2. Select engine/mode...
-        3. Observe error...
+        1. Open repository on branch dev.
+        2. Start a turn in Architect mode with model handle claude:opus-4-6.
+        3. Trigger cancellation while subprocess is running.
     validations:
       required: true
-  - type: input
-    id: os
+  - type: textarea
+    id: expected
     attributes:
-      label: Operating System & Version
-      placeholder: "Windows 11 / macOS 15"
+      label: Expected Behavior
+      description: Describe the expected state, UI output, or daemon invariant.
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Behavior
+      description: Describe what actually happened, including state mismatches or leftover artifacts.
     validations:
       required: true
   - type: textarea
     id: logs
     attributes:
-      label: Relevant Logs or Output (redact tokens/secrets)
+      label: Relevant Logs and Stack Traces
+      description: Paste relevant daemon, renderer, or CLI output with all tokens and sensitive paths redacted.
       render: shell
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Submission Checklist
+      options:
+        - label: I searched existing open and closed issues to avoid duplicates.
+          required: true
+        - label: I redacted all credentials, tokens, and private file paths.
+          required: true
+        - label: This report is written in English with zero emojis.
+          required: true
