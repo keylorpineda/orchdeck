@@ -1,5 +1,10 @@
 export { AdapterRegistry } from './adapters/adapter-registry.js';
 export {
+  parseAdapterLoaderMode,
+  resolveDaemonAdapters,
+  type AdapterLoaderMode,
+} from './adapters/adapter-loader.js';
+export {
   AGY_MODELS,
   AntigravityAdapter,
   DEFAULT_AGY_CAPABILITIES,
