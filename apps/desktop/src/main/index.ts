@@ -263,6 +263,44 @@ function registerIpcHandlers(): void {
     }
     return supervisor.getClient().call('turn.cancel', { turnId });
   });
+
+  ipcMain.handle('orchdeck:changes-inspect', async (_event, projectId: unknown) => {
+    if (typeof projectId !== 'string' || projectId.length === 0) {
+      throw new Error('Invalid projectId argument for orchdeck:changes-inspect.');
+    }
+    return supervisor.getClient().call('changes.inspect', { projectId });
+  });
+
+  ipcMain.handle('orchdeck:changes-run-tests', async (_event, projectId: unknown) => {
+    if (typeof projectId !== 'string' || projectId.length === 0) {
+      throw new Error('Invalid projectId argument for orchdeck:changes-run-tests.');
+    }
+    return supervisor.getClient().call('changes.runTests', { projectId });
+  });
+
+  ipcMain.handle('orchdeck:changes-approve', async (_event, rawParams: unknown) => {
+    const params = asObject(rawParams, 'orchdeck:changes-approve');
+    const projectId = params['projectId'];
+    const commitMessage = params['commitMessage'];
+    const branchSlug = params['branchSlug'];
+    if (
+      typeof projectId !== 'string' ||
+      projectId.length === 0 ||
+      typeof commitMessage !== 'string' ||
+      commitMessage.trim().length === 0 ||
+      (branchSlug !== undefined && typeof branchSlug !== 'string')
+    ) {
+      throw new Error('Invalid params for orchdeck:changes-approve.');
+    }
+    return supervisor.getClient().call('changes.approve', { projectId, commitMessage, branchSlug });
+  });
+
+  ipcMain.handle('orchdeck:changes-discard', async (_event, projectId: unknown) => {
+    if (typeof projectId !== 'string' || projectId.length === 0) {
+      throw new Error('Invalid projectId argument for orchdeck:changes-discard.');
+    }
+    return supervisor.getClient().call('changes.discard', { projectId });
+  });
 }
 
 function configureSecurityHeaders(): void {

@@ -229,6 +229,72 @@ export interface TurnCancelResult {
   readonly cancelled: boolean;
 }
 
+export type ChangeFileStatus = 'modified' | 'added' | 'deleted' | 'renamed' | 'untracked';
+
+export interface ChangedFileStat {
+  readonly path: string;
+  readonly status: ChangeFileStatus;
+  readonly additions: number;
+  readonly deletions: number;
+  readonly isBinary: boolean;
+  readonly diff: string;
+}
+
+export interface ChangeCardSnapshot {
+  readonly branch: string;
+  readonly isClean: boolean;
+  readonly totalAdditions: number;
+  readonly totalDeletions: number;
+  readonly files: readonly ChangedFileStat[];
+  readonly isTruncated: boolean;
+}
+
+export interface ChangesInspectParams {
+  readonly projectId: string;
+}
+
+export interface ChangesInspectResult {
+  readonly snapshot: ChangeCardSnapshot;
+}
+
+export interface ChangesRunTestsParams {
+  readonly projectId: string;
+}
+
+export interface TestRunResult {
+  readonly command: string;
+  readonly exitCode: number | null;
+  readonly passed: boolean;
+  readonly timedOut: boolean;
+  readonly durationMs: number;
+  readonly output: string;
+}
+
+export interface ChangesRunTestsResult {
+  readonly result: TestRunResult;
+}
+
+export interface ChangesApproveParams {
+  readonly projectId: string;
+  readonly commitMessage: string;
+  readonly branchSlug?: string | undefined;
+}
+
+export interface ChangesApproveResult {
+  readonly branch: string;
+  readonly commitSha: string;
+}
+
+export interface ChangesDiscardParams {
+  readonly projectId: string;
+}
+
+export interface ChangesDiscardResult {
+  readonly discarded: boolean;
+  readonly stashCreated: boolean;
+  readonly stashRef: string | null;
+}
+
 export type EmptyParams = Record<string, never>;
 
 export interface DaemonMethodMap {
@@ -307,6 +373,22 @@ export interface DaemonMethodMap {
   'turn.cancel': {
     params: TurnCancelParams;
     result: TurnCancelResult;
+  };
+  'changes.inspect': {
+    params: ChangesInspectParams;
+    result: ChangesInspectResult;
+  };
+  'changes.runTests': {
+    params: ChangesRunTestsParams;
+    result: ChangesRunTestsResult;
+  };
+  'changes.approve': {
+    params: ChangesApproveParams;
+    result: ChangesApproveResult;
+  };
+  'changes.discard': {
+    params: ChangesDiscardParams;
+    result: ChangesDiscardResult;
   };
 }
 

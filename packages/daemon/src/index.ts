@@ -46,7 +46,13 @@ export {
   type UsageEventRecord,
 } from './db/database.js';
 export { INITIAL_MIGRATIONS, type Migration } from './db/migrations.js';
-export { GitService, assertPathInsideRepo, type GitServiceOptions, type GitStatusSummary } from './git/git-service.js';
+export {
+  GitService,
+  assertPathInsideRepo,
+  tokenizeSafeCommand,
+  type GitServiceOptions,
+  type GitStatusSummary,
+} from './git/git-service.js';
 export {
   DaemonRpcClient,
   JsonRpcClientError,

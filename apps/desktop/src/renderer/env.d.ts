@@ -2,6 +2,11 @@
 
 import type {
   AdaptersListResult,
+  ChangesApproveParams,
+  ChangesApproveResult,
+  ChangesDiscardResult,
+  ChangesInspectResult,
+  ChangesRunTestsResult,
   ChatsArchiveParams,
   ChatsArchiveResult,
   ChatsCreateParams,
@@ -53,6 +58,10 @@ export interface OrchdeckApi {
   listAdapters(): Promise<AdaptersListResult>;
   startTurn(params: TurnStartParams): Promise<TurnStartResult>;
   cancelTurn(turnId: string): Promise<TurnCancelResult>;
+  inspectChanges(projectId: string): Promise<ChangesInspectResult>;
+  runProjectTests(projectId: string): Promise<ChangesRunTestsResult>;
+  approveChanges(params: ChangesApproveParams): Promise<ChangesApproveResult>;
+  discardChanges(projectId: string): Promise<ChangesDiscardResult>;
   onTurnEvent(listener: (event: TurnEventNotificationParams) => void): () => void;
 }
 
