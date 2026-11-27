@@ -44,6 +44,8 @@ export interface ProjectRecord {
   readonly rootPath: string;
   readonly defaultBranch: string;
   readonly testCommand: string | null;
+  readonly worktreeAllowlist?: readonly string[] | undefined;
+  readonly worktreeSetupCommand?: string | null | undefined;
   readonly createdAt: string;
   readonly updatedAt: string;
 }
@@ -60,6 +62,8 @@ export interface ChatRecord {
   readonly projectId: string;
   readonly title: string;
   readonly archivedAt: string | null;
+  readonly worktreePath?: string | null | undefined;
+  readonly worktreeBranch?: string | null | undefined;
   readonly createdAt: string;
   readonly updatedAt: string;
 }
@@ -139,6 +143,8 @@ export interface ProjectsUpdateParams {
   readonly id: string;
   readonly name?: string | undefined;
   readonly testCommand?: string | null | undefined;
+  readonly worktreeAllowlist?: readonly string[] | undefined;
+  readonly worktreeSetupCommand?: string | null | undefined;
 }
 
 export interface ProjectsUpdateResult {
@@ -266,6 +272,7 @@ export interface ChangeCardSnapshot {
 
 export interface ChangesInspectParams {
   readonly projectId: string;
+  readonly chatId?: string | undefined;
 }
 
 export interface ChangesInspectResult {
@@ -274,6 +281,7 @@ export interface ChangesInspectResult {
 
 export interface ChangesRunTestsParams {
   readonly projectId: string;
+  readonly chatId?: string | undefined;
 }
 
 export interface TestRunResult {
@@ -291,6 +299,7 @@ export interface ChangesRunTestsResult {
 
 export interface ChangesApproveParams {
   readonly projectId: string;
+  readonly chatId?: string | undefined;
   readonly commitMessage: string;
   readonly branchSlug?: string | undefined;
 }
@@ -302,6 +311,7 @@ export interface ChangesApproveResult {
 
 export interface ChangesDiscardParams {
   readonly projectId: string;
+  readonly chatId?: string | undefined;
 }
 
 export interface ChangesDiscardResult {
@@ -337,6 +347,7 @@ export interface TaskRunGetResult {
 
 export interface UsageSummaryParams {
   readonly providerId?: ProviderId | undefined;
+  readonly includeLocalLogs?: boolean | undefined;
 }
 
 export interface RecipesListResult {
@@ -422,6 +433,7 @@ export interface HandoffRelayResult {
 
 export interface ChangesIntegrateBranchParams {
   readonly projectId: string;
+  readonly chatId?: string | undefined;
   readonly targetBranch?: string | undefined;
   readonly strategy?: 'merge' | 'squash' | undefined;
   readonly commitMessage?: string | undefined;
@@ -464,6 +476,53 @@ export interface SecondOpinionResolveParams {
 
 export interface SecondOpinionResolveResult {
   readonly secondOpinion: SecondOpinionRecord;
+}
+
+export interface WorktreeInfo {
+  readonly worktreePath: string;
+  readonly branch: string | null;
+  readonly headSha: string | null;
+  readonly isMain: boolean;
+  readonly isOrphan: boolean;
+}
+
+export interface WorktreesCreateParams {
+  readonly projectId: string;
+  readonly chatId: string;
+  readonly branchSlug?: string | undefined;
+}
+
+export interface WorktreesCreateResult {
+  readonly chat: ChatRecord;
+  readonly worktreePath: string;
+  readonly branch: string;
+}
+
+export interface WorktreesListParams {
+  readonly projectId: string;
+}
+
+export interface WorktreesListResult {
+  readonly worktrees: readonly WorktreeInfo[];
+}
+
+export interface WorktreesRemoveParams {
+  readonly projectId: string;
+  readonly chatId: string;
+}
+
+export interface WorktreesRemoveResult {
+  readonly removed: boolean;
+  readonly chat: ChatRecord;
+}
+
+export interface WorktreesPruneParams {
+  readonly projectId: string;
+}
+
+export interface WorktreesPruneResult {
+  readonly prunedCount: number;
+  readonly prunedPaths: readonly string[];
 }
 
 export type EmptyParams = Record<string, never>;
@@ -624,6 +683,22 @@ export interface DaemonMethodMap {
   'secondOpinion.resolve': {
     params: SecondOpinionResolveParams;
     result: SecondOpinionResolveResult;
+  };
+  'worktrees.create': {
+    params: WorktreesCreateParams;
+    result: WorktreesCreateResult;
+  };
+  'worktrees.list': {
+    params: WorktreesListParams;
+    result: WorktreesListResult;
+  };
+  'worktrees.remove': {
+    params: WorktreesRemoveParams;
+    result: WorktreesRemoveResult;
+  };
+  'worktrees.prune': {
+    params: WorktreesPruneParams;
+    result: WorktreesPruneResult;
   };
 }
 

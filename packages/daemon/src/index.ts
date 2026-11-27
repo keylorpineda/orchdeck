@@ -77,6 +77,17 @@ export {
   type WorkingTreeBaseline,
 } from './git/git-service.js';
 export {
+  WorktreeManager,
+  type CreateWorktreeOptions,
+  type CreatedWorktreeResult,
+} from './git/worktree-manager.js';
+export {
+  ProviderCooldownTracker,
+  buildUsageSummaryWithRadar,
+  computeEmpiricalCalibration,
+  scanLocalCliLogs,
+} from './usage/quota-radar.js';
+export {
   DaemonRpcClient,
   JsonRpcClientError,
   type DaemonRpcClientOptions,

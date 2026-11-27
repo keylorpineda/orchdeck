@@ -30,6 +30,8 @@ export interface CreateProjectInput {
 export interface UpdateProjectInput {
   readonly name?: string | undefined;
   readonly testCommand?: string | null | undefined;
+  readonly worktreeAllowlist?: readonly string[] | undefined;
+  readonly worktreeSetupCommand?: string | null | undefined;
 }
 
 export interface AppendMessageInput {
@@ -63,14 +65,32 @@ export interface UsageEventRecord {
   readonly createdAt: string;
 }
 
+function parseAllowlistJson(raw: unknown): readonly string[] {
+  if (typeof raw !== 'string' || raw.trim().length === 0) {
+    return [];
+  }
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    return parsed.filter((item): item is string => typeof item === 'string' && item.trim().length > 0);
+  } catch {
+    return [];
+  }
+}
+
 function mapProjectRow(row: Record<string, unknown>): ProjectRecord {
   const testCommandRaw = row['test_command'];
+  const setupRaw = row['worktree_setup_command'];
   return {
     id: String(row['id'] ?? ''),
     name: String(row['name'] ?? ''),
     rootPath: String(row['root_path'] ?? ''),
     defaultBranch: String(row['default_branch'] ?? 'main'),
     testCommand: typeof testCommandRaw === 'string' && testCommandRaw.length > 0 ? testCommandRaw : null,
+    worktreeAllowlist: parseAllowlistJson(row['worktree_allowlist']),
+    worktreeSetupCommand: typeof setupRaw === 'string' && setupRaw.length > 0 ? setupRaw : null,
     createdAt: String(row['created_at'] ?? ''),
     updatedAt: String(row['updated_at'] ?? ''),
   };
@@ -78,11 +98,15 @@ function mapProjectRow(row: Record<string, unknown>): ProjectRecord {
 
 function mapChatRow(row: Record<string, unknown>): ChatRecord {
   const archivedRaw = row['archived_at'];
+  const wtPathRaw = row['worktree_path'];
+  const wtBranchRaw = row['worktree_branch'];
   return {
     id: String(row['id'] ?? ''),
     projectId: String(row['project_id'] ?? ''),
     title: String(row['title'] ?? ''),
     archivedAt: typeof archivedRaw === 'string' && archivedRaw.length > 0 ? archivedRaw : null,
+    worktreePath: typeof wtPathRaw === 'string' && wtPathRaw.length > 0 ? wtPathRaw : null,
+    worktreeBranch: typeof wtBranchRaw === 'string' && wtBranchRaw.length > 0 ? wtBranchRaw : null,
     createdAt: String(row['created_at'] ?? ''),
     updatedAt: String(row['updated_at'] ?? ''),
   };
@@ -320,7 +344,8 @@ export class DaemonDatabase {
     const row = this.db
       .prepare(
         `
-        SELECT id, name, root_path, default_branch, test_command, created_at, updated_at
+        SELECT id, name, root_path, default_branch, test_command,
+               worktree_allowlist, worktree_setup_command, created_at, updated_at
         FROM projects
         WHERE id = ?
         `,
@@ -344,22 +369,34 @@ export class DaemonDatabase {
         : input.testCommand !== null && input.testCommand.trim().length > 0
           ? input.testCommand.trim()
           : null;
+    const nextAllowlist =
+      input.worktreeAllowlist !== undefined
+        ? [...input.worktreeAllowlist]
+        : [...(existing.worktreeAllowlist ?? [])];
+    const nextSetupCommand =
+      input.worktreeSetupCommand === undefined
+        ? (existing.worktreeSetupCommand ?? null)
+        : input.worktreeSetupCommand !== null && input.worktreeSetupCommand.trim().length > 0
+          ? input.worktreeSetupCommand.trim()
+          : null;
     const now = new Date().toISOString();
 
     this.db
       .prepare(
         `
         UPDATE projects
-        SET name = ?, test_command = ?, updated_at = ?
+        SET name = ?, test_command = ?, worktree_allowlist = ?, worktree_setup_command = ?, updated_at = ?
         WHERE id = ?
         `,
       )
-      .run(nextName, nextTestCommand, now, id);
+      .run(nextName, nextTestCommand, JSON.stringify(nextAllowlist), nextSetupCommand, now, id);
 
     return {
       ...existing,
       name: nextName,
       testCommand: nextTestCommand,
+      worktreeAllowlist: nextAllowlist,
+      worktreeSetupCommand: nextSetupCommand,
       updatedAt: now,
     };
   }
@@ -373,7 +410,8 @@ export class DaemonDatabase {
     const rows = this.db
       .prepare(
         `
-        SELECT id, name, root_path, default_branch, test_command, created_at, updated_at
+        SELECT id, name, root_path, default_branch, test_command,
+               worktree_allowlist, worktree_setup_command, created_at, updated_at
         FROM projects
         ORDER BY updated_at DESC, name ASC
         `,
@@ -424,7 +462,7 @@ export class DaemonDatabase {
     const row = this.db
       .prepare(
         `
-        SELECT id, project_id, title, archived_at, created_at, updated_at
+        SELECT id, project_id, title, archived_at, worktree_path, worktree_branch, created_at, updated_at
         FROM chats
         WHERE id = ?
         `,
@@ -437,13 +475,13 @@ export class DaemonDatabase {
   listChats(projectId: string, includeArchived = false): ChatRecord[] {
     const sql = includeArchived
       ? `
-        SELECT id, project_id, title, archived_at, created_at, updated_at
+        SELECT id, project_id, title, archived_at, worktree_path, worktree_branch, created_at, updated_at
         FROM chats
         WHERE project_id = ?
         ORDER BY updated_at DESC, created_at DESC
         `
       : `
-        SELECT id, project_id, title, archived_at, created_at, updated_at
+        SELECT id, project_id, title, archived_at, worktree_path, worktree_branch, created_at, updated_at
         FROM chats
         WHERE project_id = ? AND archived_at IS NULL
         ORDER BY updated_at DESC, created_at DESC
@@ -495,6 +533,50 @@ export class DaemonDatabase {
   deleteChat(id: string): boolean {
     const result = this.db.prepare('DELETE FROM chats WHERE id = ?').run(id);
     return Number(result.changes) > 0;
+  }
+
+  setChatWorktree(
+    chatId: string,
+    worktreePath: string | null,
+    worktreeBranch: string | null,
+  ): ChatRecord {
+    const existing = this.getChat(chatId);
+    if (!existing) {
+      throw new Error(`Chat "${chatId}" not found.`);
+    }
+    const now = new Date().toISOString();
+    this.db
+      .prepare(
+        `
+        UPDATE chats
+        SET worktree_path = ?, worktree_branch = ?, updated_at = ?
+        WHERE id = ?
+        `,
+      )
+      .run(worktreePath, worktreeBranch, now, chatId);
+
+    return {
+      ...existing,
+      worktreePath,
+      worktreeBranch,
+      updatedAt: now,
+    };
+  }
+
+  listProjectChatWorktrees(projectId: string): string[] {
+    const rows = this.db
+      .prepare(
+        `
+        SELECT worktree_path
+        FROM chats
+        WHERE project_id = ? AND worktree_path IS NOT NULL
+        `,
+      )
+      .all(projectId) as Array<Record<string, unknown>>;
+
+    return rows
+      .map((row) => row['worktree_path'])
+      .filter((val): val is string => typeof val === 'string' && val.length > 0);
   }
 
   appendMessage(input: AppendMessageInput): MessageRecord {
@@ -659,8 +741,18 @@ export class DaemonDatabase {
 
     const providers: ProviderUsageSummary[] = targetProviders.map((providerId) => ({
       providerId,
+      status: 'available',
+      cooldownUntil: null,
+      lastRateLimitMessage: null,
       last5Hours: this.queryUsageWindow(providerId, 5, cutoff5h),
       last7Days: this.queryUsageWindow(providerId, 168, cutoff7d),
+      calibration: {
+        label: 'Local Calibration',
+        sampleCount: 0,
+        observedCeilingTokens: null,
+        pressureBlocks: 0,
+        localCliLogEvents: 0,
+      },
     }));
 
     return {

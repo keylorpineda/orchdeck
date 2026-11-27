@@ -114,15 +114,28 @@ function registerIpcHandlers(): void {
     const id = params['id'];
     const name = params['name'];
     const testCommand = params['testCommand'];
+    const allowlistRaw = params['worktreeAllowlist'];
+    const setupRaw = params['worktreeSetupCommand'];
     if (
       typeof id !== 'string' ||
       id.length === 0 ||
       (name !== undefined && typeof name !== 'string') ||
-      (testCommand !== undefined && testCommand !== null && typeof testCommand !== 'string')
+      (testCommand !== undefined && testCommand !== null && typeof testCommand !== 'string') ||
+      (allowlistRaw !== undefined && !Array.isArray(allowlistRaw)) ||
+      (setupRaw !== undefined && setupRaw !== null && typeof setupRaw !== 'string')
     ) {
       throw new Error('Invalid params for orchdeck:projects-update.');
     }
-    return supervisor.getClient().call('projects.update', { id, name, testCommand });
+    const worktreeAllowlist = Array.isArray(allowlistRaw)
+      ? allowlistRaw.filter((entry): entry is string => typeof entry === 'string')
+      : undefined;
+    return supervisor.getClient().call('projects.update', {
+      id,
+      name,
+      testCommand,
+      worktreeAllowlist,
+      worktreeSetupCommand: setupRaw,
+    });
   });
 
   ipcMain.handle('orchdeck:projects-delete', async (_event, id: unknown) => {
@@ -264,23 +277,42 @@ function registerIpcHandlers(): void {
     return supervisor.getClient().call('turn.cancel', { turnId });
   });
 
-  ipcMain.handle('orchdeck:changes-inspect', async (_event, projectId: unknown) => {
+  ipcMain.handle('orchdeck:changes-inspect', async (_event, rawArg: unknown) => {
+    if (typeof rawArg === 'string' && rawArg.length > 0) {
+      return supervisor.getClient().call('changes.inspect', { projectId: rawArg });
+    }
+    const params = asObject(rawArg, 'orchdeck:changes-inspect');
+    const projectId = params['projectId'];
+    const chatId = params['chatId'];
     if (typeof projectId !== 'string' || projectId.length === 0) {
       throw new Error('Invalid projectId argument for orchdeck:changes-inspect.');
     }
-    return supervisor.getClient().call('changes.inspect', { projectId });
+    return supervisor.getClient().call('changes.inspect', {
+      projectId,
+      chatId: typeof chatId === 'string' ? chatId : undefined,
+    });
   });
 
-  ipcMain.handle('orchdeck:changes-run-tests', async (_event, projectId: unknown) => {
+  ipcMain.handle('orchdeck:changes-run-tests', async (_event, rawArg: unknown) => {
+    if (typeof rawArg === 'string' && rawArg.length > 0) {
+      return supervisor.getClient().call('changes.runTests', { projectId: rawArg });
+    }
+    const params = asObject(rawArg, 'orchdeck:changes-run-tests');
+    const projectId = params['projectId'];
+    const chatId = params['chatId'];
     if (typeof projectId !== 'string' || projectId.length === 0) {
       throw new Error('Invalid projectId argument for orchdeck:changes-run-tests.');
     }
-    return supervisor.getClient().call('changes.runTests', { projectId });
+    return supervisor.getClient().call('changes.runTests', {
+      projectId,
+      chatId: typeof chatId === 'string' ? chatId : undefined,
+    });
   });
 
   ipcMain.handle('orchdeck:changes-approve', async (_event, rawParams: unknown) => {
     const params = asObject(rawParams, 'orchdeck:changes-approve');
     const projectId = params['projectId'];
+    const chatId = params['chatId'];
     const commitMessage = params['commitMessage'];
     const branchSlug = params['branchSlug'];
     if (
@@ -292,14 +324,28 @@ function registerIpcHandlers(): void {
     ) {
       throw new Error('Invalid params for orchdeck:changes-approve.');
     }
-    return supervisor.getClient().call('changes.approve', { projectId, commitMessage, branchSlug });
+    return supervisor.getClient().call('changes.approve', {
+      projectId,
+      chatId: typeof chatId === 'string' ? chatId : undefined,
+      commitMessage,
+      branchSlug,
+    });
   });
 
-  ipcMain.handle('orchdeck:changes-discard', async (_event, projectId: unknown) => {
+  ipcMain.handle('orchdeck:changes-discard', async (_event, rawArg: unknown) => {
+    if (typeof rawArg === 'string' && rawArg.length > 0) {
+      return supervisor.getClient().call('changes.discard', { projectId: rawArg });
+    }
+    const params = asObject(rawArg, 'orchdeck:changes-discard');
+    const projectId = params['projectId'];
+    const chatId = params['chatId'];
     if (typeof projectId !== 'string' || projectId.length === 0) {
       throw new Error('Invalid projectId argument for orchdeck:changes-discard.');
     }
-    return supervisor.getClient().call('changes.discard', { projectId });
+    return supervisor.getClient().call('changes.discard', {
+      projectId,
+      chatId: typeof chatId === 'string' ? chatId : undefined,
+    });
   });
 
   ipcMain.handle('orchdeck:task-run-start', async (_event, rawParams: unknown) => {
@@ -351,11 +397,28 @@ function registerIpcHandlers(): void {
     return supervisor.getClient().call('taskRun.rejectPlan', { taskRunId });
   });
 
-  ipcMain.handle('orchdeck:usage-summary', async (_event, providerId: unknown) => {
-    if (providerId !== undefined && providerId !== 'claude' && providerId !== 'codex' && providerId !== 'antigravity') {
+  ipcMain.handle('orchdeck:usage-summary', async (_event, rawArg: unknown) => {
+    if (rawArg === undefined) {
+      return supervisor.getClient().call('usage.summary', {});
+    }
+    if (rawArg === 'claude' || rawArg === 'codex' || rawArg === 'antigravity') {
+      return supervisor.getClient().call('usage.summary', { providerId: rawArg });
+    }
+    const params = asObject(rawArg, 'orchdeck:usage-summary');
+    const providerId = params['providerId'];
+    const includeLocalLogs = params['includeLocalLogs'];
+    if (
+      providerId !== undefined &&
+      providerId !== 'claude' &&
+      providerId !== 'codex' &&
+      providerId !== 'antigravity'
+    ) {
       throw new Error('Invalid providerId for orchdeck:usage-summary.');
     }
-    return supervisor.getClient().call('usage.summary', { providerId });
+    return supervisor.getClient().call('usage.summary', {
+      providerId,
+      includeLocalLogs: typeof includeLocalLogs === 'boolean' ? includeLocalLogs : undefined,
+    });
   });
 
   ipcMain.handle('orchdeck:recipes-list', async () => {
@@ -500,6 +563,7 @@ function registerIpcHandlers(): void {
   ipcMain.handle('orchdeck:changes-integrate-branch', async (_event, rawParams: unknown) => {
     const params = asObject(rawParams, 'orchdeck:changes-integrate-branch');
     const projectId = params['projectId'];
+    const chatId = params['chatId'];
     if (typeof projectId !== 'string' || projectId.length === 0) {
       throw new Error('Invalid projectId for orchdeck:changes-integrate-branch.');
     }
@@ -507,6 +571,7 @@ function registerIpcHandlers(): void {
     const strategy = strategyRaw === 'merge' || strategyRaw === 'squash' ? strategyRaw : undefined;
     return supervisor.getClient().call('changes.integrateBranch', {
       projectId,
+      chatId: typeof chatId === 'string' ? chatId : undefined,
       targetBranch:
         typeof params['targetBranch'] === 'string' ? params['targetBranch'] : undefined,
       strategy,
@@ -564,6 +629,56 @@ function registerIpcHandlers(): void {
       secondOpinionId,
       resolution,
     });
+  });
+
+  ipcMain.handle('orchdeck:worktrees-create', async (_event, rawParams: unknown) => {
+    const params = asObject(rawParams, 'orchdeck:worktrees-create');
+    const projectId = params['projectId'];
+    const chatId = params['chatId'];
+    const branchSlug = params['branchSlug'];
+    if (
+      typeof projectId !== 'string' ||
+      projectId.length === 0 ||
+      typeof chatId !== 'string' ||
+      chatId.length === 0 ||
+      (branchSlug !== undefined && typeof branchSlug !== 'string')
+    ) {
+      throw new Error('Invalid params for orchdeck:worktrees-create.');
+    }
+    return supervisor.getClient().call('worktrees.create', {
+      projectId,
+      chatId,
+      branchSlug,
+    });
+  });
+
+  ipcMain.handle('orchdeck:worktrees-list', async (_event, projectId: unknown) => {
+    if (typeof projectId !== 'string' || projectId.length === 0) {
+      throw new Error('Invalid projectId for orchdeck:worktrees-list.');
+    }
+    return supervisor.getClient().call('worktrees.list', { projectId });
+  });
+
+  ipcMain.handle('orchdeck:worktrees-remove', async (_event, rawParams: unknown) => {
+    const params = asObject(rawParams, 'orchdeck:worktrees-remove');
+    const projectId = params['projectId'];
+    const chatId = params['chatId'];
+    if (
+      typeof projectId !== 'string' ||
+      projectId.length === 0 ||
+      typeof chatId !== 'string' ||
+      chatId.length === 0
+    ) {
+      throw new Error('Invalid params for orchdeck:worktrees-remove.');
+    }
+    return supervisor.getClient().call('worktrees.remove', { projectId, chatId });
+  });
+
+  ipcMain.handle('orchdeck:worktrees-prune', async (_event, projectId: unknown) => {
+    if (typeof projectId !== 'string' || projectId.length === 0) {
+      throw new Error('Invalid projectId for orchdeck:worktrees-prune.');
+    }
+    return supervisor.getClient().call('worktrees.prune', { projectId });
   });
 }
 

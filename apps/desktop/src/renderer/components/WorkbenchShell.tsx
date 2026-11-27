@@ -14,6 +14,7 @@ import { useTheme } from './ThemeProvider';
 export interface WorkbenchShellProps {
   readonly projectName?: string | undefined;
   readonly branchName?: string | undefined;
+  readonly radarSlot?: ReactNode | undefined;
   readonly sidebarContent?: ReactNode | undefined;
   readonly drawerContent?: ReactNode | undefined;
   readonly children: ReactNode;
@@ -22,6 +23,7 @@ export interface WorkbenchShellProps {
 export function WorkbenchShell({
   projectName,
   branchName,
+  radarSlot,
   sidebarContent,
   drawerContent,
   children,
@@ -76,15 +78,17 @@ export function WorkbenchShell({
         </div>
 
         <div className="flex items-center gap-2">
-          <div
-            className="flex items-center gap-2 rounded-[4px] border border-border-subtle bg-surface px-2 py-1"
-            aria-label="Engine availability marks"
-            title="Claude, Codex, Antigravity"
-          >
-            <EngineMark provider="claude" muted />
-            <EngineMark provider="codex" muted />
-            <EngineMark provider="antigravity" muted />
-          </div>
+          {radarSlot ?? (
+            <div
+              className="flex items-center gap-2 rounded-[4px] border border-border-subtle bg-surface px-2 py-1"
+              aria-label="Engine availability marks"
+              title="Claude, Codex, Antigravity"
+            >
+              <EngineMark provider="claude" muted />
+              <EngineMark provider="codex" muted />
+              <EngineMark provider="antigravity" muted />
+            </div>
+          )}
 
           <button
             type="button"

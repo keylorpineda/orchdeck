@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { createHighlighterCore, type HighlighterCore, type ThemedToken, type ThemeRegistration } from 'shiki/core';
 import { createJavaScriptRegexEngine } from 'shiki/engine/javascript';
 import { bundledLanguages, type BundledLanguage } from 'shiki/langs';
 import { detectShikiLang, parseDiffLines } from '../state/change-card-utils';
+import type { InlineDiffComment } from '../state/inline-comments';
 import { useTheme } from './ThemeProvider';
 
 const PAPER_INK_THEME: ThemeRegistration = {
@@ -64,12 +65,27 @@ export interface ShikiDiffViewProps {
   readonly filePath: string;
   readonly diff: string;
   readonly isBinary: boolean;
+  readonly comments?: readonly InlineDiffComment[] | undefined;
+  readonly onAddComment?: ((comment: Omit<InlineDiffComment, 'id'>) => void) | undefined;
+  readonly onRemoveComment?: ((commentId: string) => void) | undefined;
 }
 
-export function ShikiDiffView({ filePath, diff, isBinary }: ShikiDiffViewProps) {
+export function ShikiDiffView({
+  filePath,
+  diff,
+  isBinary,
+  comments = [],
+  onAddComment,
+  onRemoveComment,
+}: ShikiDiffViewProps) {
   const { theme } = useTheme();
   const parsedLines = useMemo(() => parseDiffLines(diff), [diff]);
   const [tokenLines, setTokenLines] = useState<readonly (readonly ThemedToken[])[] | null>(null);
+  const [draftTarget, setDraftTarget] = useState<{
+    readonly lineNumber: number;
+    readonly side: 'new' | 'old';
+  } | null>(null);
+  const [draftBody, setDraftBody] = useState('');
 
   const lang = useMemo(() => detectShikiLang(filePath), [filePath]);
   const themeName = theme === 'dark' ? 'orchdeck-graphite-vermilion' : 'orchdeck-paper-ink';
@@ -173,33 +189,144 @@ export function ShikiDiffView({ filePath, diff, isBinary }: ShikiDiffViewProps) 
                   : 'text-ink-tertiary';
 
             const tokens = lineTokenMap.get(index);
+            const targetLineNumber = line.newLine ?? line.oldLine;
+            const targetSide: 'new' | 'old' = line.newLine !== null ? 'new' : 'old';
+            const lineComments =
+              targetLineNumber !== null
+                ? comments.filter(
+                    (c) =>
+                      c.filePath === filePath &&
+                      c.lineNumber === targetLineNumber &&
+                      c.side === targetSide,
+                  )
+                : [];
+            const isDrafting =
+              draftTarget !== null &&
+              targetLineNumber !== null &&
+              draftTarget.lineNumber === targetLineNumber &&
+              draftTarget.side === targetSide;
 
             return (
-              <tr key={index} className={rowClasses}>
-                <td className="w-[40px] select-none border-r border-border-subtle px-2 py-0 text-right text-ink-tertiary">
-                  {line.oldLine ?? ''}
-                </td>
-                <td className="w-[40px] select-none border-r border-border-subtle px-2 py-0 text-right text-ink-tertiary">
-                  {line.newLine ?? ''}
-                </td>
-                <td className={`w-[18px] select-none px-1 py-0 text-center ${prefixClass}`}>
-                  {line.prefix}
-                </td>
-                <td className="whitespace-pre px-2 py-0">
-                  {tokens ? (
-                    tokens.map((token, tokenIdx) => (
-                      <span
-                        key={tokenIdx}
-                        style={token.color ? { color: token.color } : undefined}
+              <Fragment key={index}>
+                <tr className={rowClasses}>
+                  <td className="w-[40px] select-none border-r border-border-subtle px-2 py-0 text-right text-ink-tertiary">
+                    {line.oldLine ?? ''}
+                  </td>
+                  <td className="w-[40px] select-none border-r border-border-subtle px-2 py-0 text-right text-ink-tertiary">
+                    {onAddComment && targetLineNumber !== null ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDraftTarget({ lineNumber: targetLineNumber, side: targetSide });
+                          setDraftBody('');
+                        }}
+                        title={`Add inline review comment on line ${targetLineNumber}`}
+                        className="w-full text-right hover:font-medium hover:text-accent"
                       >
-                        {token.content}
-                      </span>
-                    ))
-                  ) : (
-                    <span>{line.code}</span>
-                  )}
-                </td>
-              </tr>
+                        {line.newLine ?? line.oldLine ?? ''}
+                      </button>
+                    ) : (
+                      line.newLine ?? ''
+                    )}
+                  </td>
+                  <td className={`w-[18px] select-none px-1 py-0 text-center ${prefixClass}`}>
+                    {line.prefix}
+                  </td>
+                  <td className="whitespace-pre px-2 py-0">
+                    {tokens ? (
+                      tokens.map((token, tokenIdx) => (
+                        <span
+                          key={tokenIdx}
+                          style={token.color ? { color: token.color } : undefined}
+                        >
+                          {token.content}
+                        </span>
+                      ))
+                    ) : (
+                      <span>{line.code}</span>
+                    )}
+                  </td>
+                </tr>
+
+                {lineComments.map((comment) => (
+                  <tr key={comment.id} className="bg-warn-bg">
+                    <td colSpan={4} className="border-y border-border-subtle px-3 py-1.5 text-[11.5px]">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-ink">
+                          <span className="font-medium text-warn">
+                            L{comment.lineNumber} ({comment.side}):
+                          </span>{' '}
+                          {comment.body}
+                        </span>
+                        {onRemoveComment ? (
+                          <button
+                            type="button"
+                            onClick={() => onRemoveComment(comment.id)}
+                            className="text-ink-tertiary hover:text-fail"
+                          >
+                            Remove
+                          </button>
+                        ) : null}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+
+                {isDrafting && draftTarget && onAddComment ? (
+                  <tr className="bg-inset">
+                    <td colSpan={4} className="border-y border-border-subtle px-3 py-2">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={draftBody}
+                          onChange={(e) => setDraftBody(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && draftBody.trim().length > 0) {
+                              e.preventDefault();
+                              onAddComment({
+                                filePath,
+                                lineNumber: draftTarget.lineNumber,
+                                side: draftTarget.side,
+                                body: draftBody.trim(),
+                              });
+                              setDraftTarget(null);
+                              setDraftBody('');
+                            } else if (e.key === 'Escape') {
+                              setDraftTarget(null);
+                            }
+                          }}
+                          placeholder={`Comment on L${draftTarget.lineNumber}...`}
+                          className="flex-1 rounded-[4px] border border-border-strong bg-surface px-2 py-1 text-[11.5px] text-ink outline-none focus:border-accent"
+                        />
+                        <button
+                          type="button"
+                          disabled={draftBody.trim().length === 0}
+                          onClick={() => {
+                            onAddComment({
+                              filePath,
+                              lineNumber: draftTarget.lineNumber,
+                              side: draftTarget.side,
+                              body: draftBody.trim(),
+                            });
+                            setDraftTarget(null);
+                            setDraftBody('');
+                          }}
+                          className="rounded-[4px] border border-accent bg-accent px-2 py-1 text-[11px] font-medium text-surface disabled:opacity-50"
+                        >
+                          Save
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDraftTarget(null)}
+                          className="rounded-[4px] border border-border-subtle bg-surface px-2 py-1 text-[11px] text-ink-secondary"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ) : null}
+              </Fragment>
             );
           })}
         </tbody>
