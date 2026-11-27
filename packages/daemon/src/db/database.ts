@@ -2,13 +2,35 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import type { ProjectRecord } from '@orchdeck/shared';
+import {
+  isProviderId,
+  redactSecrets,
+  type ChatRecord,
+  type MessageRecord,
+  type MessageRole,
+  type ProjectRecord,
+  type ProviderId,
+} from '@orchdeck/shared';
 import { INITIAL_MIGRATIONS } from './migrations.js';
 
 export interface CreateProjectInput {
   readonly name: string;
   readonly rootPath: string;
   readonly defaultBranch?: string | undefined;
+  readonly testCommand?: string | null | undefined;
+}
+
+export interface UpdateProjectInput {
+  readonly name?: string | undefined;
+  readonly testCommand?: string | null | undefined;
+}
+
+export interface AppendMessageInput {
+  readonly chatId: string;
+  readonly role: MessageRole;
+  readonly providerId?: ProviderId | null | undefined;
+  readonly modelId?: string | null | undefined;
+  readonly content: string;
 }
 
 export interface RecordUsageEventInput {
@@ -31,6 +53,51 @@ export interface UsageEventRecord {
   readonly durationMs: number;
   readonly rateLimited: boolean;
   readonly createdAt: string;
+}
+
+function mapProjectRow(row: Record<string, unknown>): ProjectRecord {
+  const testCommandRaw = row['test_command'];
+  return {
+    id: String(row['id'] ?? ''),
+    name: String(row['name'] ?? ''),
+    rootPath: String(row['root_path'] ?? ''),
+    defaultBranch: String(row['default_branch'] ?? 'main'),
+    testCommand: typeof testCommandRaw === 'string' && testCommandRaw.length > 0 ? testCommandRaw : null,
+    createdAt: String(row['created_at'] ?? ''),
+    updatedAt: String(row['updated_at'] ?? ''),
+  };
+}
+
+function mapChatRow(row: Record<string, unknown>): ChatRecord {
+  const archivedRaw = row['archived_at'];
+  return {
+    id: String(row['id'] ?? ''),
+    projectId: String(row['project_id'] ?? ''),
+    title: String(row['title'] ?? ''),
+    archivedAt: typeof archivedRaw === 'string' && archivedRaw.length > 0 ? archivedRaw : null,
+    createdAt: String(row['created_at'] ?? ''),
+    updatedAt: String(row['updated_at'] ?? ''),
+  };
+}
+
+function mapMessageRow(row: Record<string, unknown>): MessageRecord {
+  const roleRaw = String(row['role'] ?? 'assistant');
+  const role: MessageRole =
+    roleRaw === 'user' || roleRaw === 'assistant' || roleRaw === 'system' ? roleRaw : 'assistant';
+  const providerRaw = row['provider_id'];
+  const providerId: ProviderId | null =
+    typeof providerRaw === 'string' && isProviderId(providerRaw) ? providerRaw : null;
+  const modelRaw = row['model_id'];
+
+  return {
+    id: String(row['id'] ?? ''),
+    chatId: String(row['chat_id'] ?? ''),
+    role,
+    providerId,
+    modelId: typeof modelRaw === 'string' && modelRaw.length > 0 ? modelRaw : null,
+    content: String(row['content'] ?? ''),
+    createdAt: String(row['created_at'] ?? ''),
+  };
 }
 
 export class DaemonDatabase {
@@ -131,45 +198,265 @@ export class DaemonDatabase {
     const now = new Date().toISOString();
     const normalizedRoot = path.resolve(input.rootPath);
     const defaultBranch = input.defaultBranch ?? 'main';
+    const testCommand =
+      input.testCommand && input.testCommand.trim().length > 0 ? input.testCommand.trim() : null;
 
     this.db
       .prepare(
         `
-        INSERT INTO projects (id, name, root_path, default_branch, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?)
+        INSERT INTO projects (id, name, root_path, default_branch, test_command, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
         `,
       )
-      .run(id, input.name, normalizedRoot, defaultBranch, now, now);
+      .run(id, input.name, normalizedRoot, defaultBranch, testCommand, now, now);
 
     return {
       id,
       name: input.name,
       rootPath: normalizedRoot,
       defaultBranch,
+      testCommand,
       createdAt: now,
       updatedAt: now,
     };
+  }
+
+  getProject(id: string): ProjectRecord | null {
+    const row = this.db
+      .prepare(
+        `
+        SELECT id, name, root_path, default_branch, test_command, created_at, updated_at
+        FROM projects
+        WHERE id = ?
+        `,
+      )
+      .get(id) as Record<string, unknown> | undefined;
+
+    return row ? mapProjectRow(row) : null;
+  }
+
+  updateProject(id: string, input: UpdateProjectInput): ProjectRecord {
+    const existing = this.getProject(id);
+    if (!existing) {
+      throw new Error(`Project "${id}" not found.`);
+    }
+
+    const nextName =
+      input.name !== undefined && input.name.trim().length > 0 ? input.name.trim() : existing.name;
+    const nextTestCommand =
+      input.testCommand === undefined
+        ? existing.testCommand
+        : input.testCommand !== null && input.testCommand.trim().length > 0
+          ? input.testCommand.trim()
+          : null;
+    const now = new Date().toISOString();
+
+    this.db
+      .prepare(
+        `
+        UPDATE projects
+        SET name = ?, test_command = ?, updated_at = ?
+        WHERE id = ?
+        `,
+      )
+      .run(nextName, nextTestCommand, now, id);
+
+    return {
+      ...existing,
+      name: nextName,
+      testCommand: nextTestCommand,
+      updatedAt: now,
+    };
+  }
+
+  deleteProject(id: string): boolean {
+    const result = this.db.prepare('DELETE FROM projects WHERE id = ?').run(id);
+    return Number(result.changes) > 0;
   }
 
   listProjects(): ProjectRecord[] {
     const rows = this.db
       .prepare(
         `
-        SELECT id, name, root_path, default_branch, created_at, updated_at
+        SELECT id, name, root_path, default_branch, test_command, created_at, updated_at
         FROM projects
         ORDER BY updated_at DESC, name ASC
         `,
       )
       .all() as Array<Record<string, unknown>>;
 
-    return rows.map((row) => ({
-      id: String(row['id'] ?? ''),
-      name: String(row['name'] ?? ''),
-      rootPath: String(row['root_path'] ?? ''),
-      defaultBranch: String(row['default_branch'] ?? 'main'),
-      createdAt: String(row['created_at'] ?? ''),
-      updatedAt: String(row['updated_at'] ?? ''),
-    }));
+    return rows.map(mapProjectRow);
+  }
+
+  createChat(projectId: string, title = 'New chat'): ChatRecord {
+    const project = this.getProject(projectId);
+    if (!project) {
+      throw new Error(`Project "${projectId}" not found.`);
+    }
+    const id = crypto.randomUUID();
+    const now = new Date().toISOString();
+    const cleanTitle = title.trim().length > 0 ? title.trim() : 'New chat';
+
+    this.db.exec('BEGIN IMMEDIATE;');
+    try {
+      this.db
+        .prepare(
+          `
+          INSERT INTO chats (id, project_id, title, archived_at, created_at, updated_at)
+          VALUES (?, ?, ?, NULL, ?, ?)
+          `,
+        )
+        .run(id, projectId, cleanTitle, now, now);
+
+      this.db.prepare('UPDATE projects SET updated_at = ? WHERE id = ?').run(now, projectId);
+      this.db.exec('COMMIT;');
+    } catch (err) {
+      this.db.exec('ROLLBACK;');
+      throw err;
+    }
+
+    return {
+      id,
+      projectId,
+      title: cleanTitle,
+      archivedAt: null,
+      createdAt: now,
+      updatedAt: now,
+    };
+  }
+
+  getChat(id: string): ChatRecord | null {
+    const row = this.db
+      .prepare(
+        `
+        SELECT id, project_id, title, archived_at, created_at, updated_at
+        FROM chats
+        WHERE id = ?
+        `,
+      )
+      .get(id) as Record<string, unknown> | undefined;
+
+    return row ? mapChatRow(row) : null;
+  }
+
+  listChats(projectId: string, includeArchived = false): ChatRecord[] {
+    const sql = includeArchived
+      ? `
+        SELECT id, project_id, title, archived_at, created_at, updated_at
+        FROM chats
+        WHERE project_id = ?
+        ORDER BY updated_at DESC, created_at DESC
+        `
+      : `
+        SELECT id, project_id, title, archived_at, created_at, updated_at
+        FROM chats
+        WHERE project_id = ? AND archived_at IS NULL
+        ORDER BY updated_at DESC, created_at DESC
+        `;
+
+    const rows = this.db.prepare(sql).all(projectId) as Array<Record<string, unknown>>;
+    return rows.map(mapChatRow);
+  }
+
+  renameChat(id: string, title: string): ChatRecord {
+    const existing = this.getChat(id);
+    if (!existing) {
+      throw new Error(`Chat "${id}" not found.`);
+    }
+    const cleanTitle = title.trim();
+    if (cleanTitle.length === 0) {
+      throw new Error('Chat title must not be empty.');
+    }
+    const now = new Date().toISOString();
+    this.db
+      .prepare('UPDATE chats SET title = ?, updated_at = ? WHERE id = ?')
+      .run(cleanTitle, now, id);
+
+    return {
+      ...existing,
+      title: cleanTitle,
+      updatedAt: now,
+    };
+  }
+
+  archiveChat(id: string, archived: boolean): ChatRecord {
+    const existing = this.getChat(id);
+    if (!existing) {
+      throw new Error(`Chat "${id}" not found.`);
+    }
+    const now = new Date().toISOString();
+    const archivedAt = archived ? now : null;
+    this.db
+      .prepare('UPDATE chats SET archived_at = ?, updated_at = ? WHERE id = ?')
+      .run(archivedAt, now, id);
+
+    return {
+      ...existing,
+      archivedAt,
+      updatedAt: now,
+    };
+  }
+
+  deleteChat(id: string): boolean {
+    const result = this.db.prepare('DELETE FROM chats WHERE id = ?').run(id);
+    return Number(result.changes) > 0;
+  }
+
+  appendMessage(input: AppendMessageInput): MessageRecord {
+    const chat = this.getChat(input.chatId);
+    if (!chat) {
+      throw new Error(`Chat "${input.chatId}" not found.`);
+    }
+
+    const id = crypto.randomUUID();
+    const now = new Date().toISOString();
+    const redactedContent = redactSecrets(input.content);
+    const providerId = input.providerId ?? null;
+    const modelId = input.modelId ?? null;
+
+    this.db.exec('BEGIN IMMEDIATE;');
+    try {
+      this.db
+        .prepare(
+          `
+          INSERT INTO messages (id, chat_id, role, provider_id, model_id, content, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+          `,
+        )
+        .run(id, input.chatId, input.role, providerId, modelId, redactedContent, now);
+
+      this.db.prepare('UPDATE chats SET updated_at = ? WHERE id = ?').run(now, input.chatId);
+      this.db.prepare('UPDATE projects SET updated_at = ? WHERE id = ?').run(now, chat.projectId);
+      this.db.exec('COMMIT;');
+    } catch (err) {
+      this.db.exec('ROLLBACK;');
+      throw err;
+    }
+
+    return {
+      id,
+      chatId: input.chatId,
+      role: input.role,
+      providerId,
+      modelId,
+      content: redactedContent,
+      createdAt: now,
+    };
+  }
+
+  listMessages(chatId: string): MessageRecord[] {
+    const rows = this.db
+      .prepare(
+        `
+        SELECT id, chat_id, role, provider_id, model_id, content, created_at
+        FROM messages
+        WHERE chat_id = ?
+        ORDER BY created_at ASC, rowid ASC
+        `,
+      )
+      .all(chatId) as Array<Record<string, unknown>>;
+
+    return rows.map(mapMessageRow);
   }
 
   recordUsageEvent(input: RecordUsageEventInput): UsageEventRecord {

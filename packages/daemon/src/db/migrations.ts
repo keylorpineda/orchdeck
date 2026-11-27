@@ -55,4 +55,18 @@ export const INITIAL_MIGRATIONS: readonly Migration[] = [
       );
     `,
   },
+  {
+    version: 2,
+    name: 'projects_test_cmd_and_chat_archive',
+    sql: `
+      ALTER TABLE projects ADD COLUMN test_command TEXT;
+      ALTER TABLE chats ADD COLUMN archived_at TEXT;
+
+      CREATE INDEX IF NOT EXISTS idx_chats_project_updated
+        ON chats(project_id, updated_at DESC);
+
+      CREATE INDEX IF NOT EXISTS idx_messages_chat_created
+        ON messages(chat_id, created_at ASC);
+    `,
+  },
 ];

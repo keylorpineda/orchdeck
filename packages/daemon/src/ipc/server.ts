@@ -1,11 +1,13 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import net from 'node:net';
+import path from 'node:path';
 import {
   DAEMON_PROTOCOL_VERSION,
   JSONRPC_ERROR_CODE,
   JSONRPC_VERSION,
   isJsonRpcRequest,
+  isProviderId,
   redactSecrets,
   type AgentRole,
   type ApprovalMode,
@@ -18,10 +20,15 @@ import {
   type JsonRpcNotification,
   type JsonRpcRequest,
   type JsonRpcSuccessResponse,
+  type MessageRole,
+  type ProjectRecord,
+  type ProjectWithGitStatus,
+  type ProviderId,
 } from '@orchdeck/shared';
 import type { AdapterRegistry } from '../adapters/adapter-registry.js';
 import type { TurnRunner } from '../adapters/turn-runner.js';
 import type { DaemonDatabase } from '../db/database.js';
+import { GitService } from '../git/git-service.js';
 
 const MAX_LINE_BYTES = 1024 * 1024;
 
@@ -31,6 +38,7 @@ export interface DaemonRpcServerOptions {
   readonly authToken: string;
   readonly registry?: AdapterRegistry | undefined;
   readonly turnRunner?: TurnRunner | undefined;
+  readonly gitService?: GitService | undefined;
   readonly startedAtMs?: number | undefined;
 }
 
@@ -83,12 +91,21 @@ function isOptionalApprovalMode(value: unknown): value is ApprovalMode | undefin
   );
 }
 
+function isMessageRole(value: unknown): value is MessageRole {
+  return value === 'user' || value === 'assistant' || value === 'system';
+}
+
+function isOptionalProviderIdOrNull(value: unknown): value is ProviderId | null | undefined {
+  return value === undefined || value === null || (typeof value === 'string' && isProviderId(value));
+}
+
 export class DaemonRpcServer {
   readonly socketPath: string;
   private readonly db: DaemonDatabase;
   private readonly authToken: string;
   private readonly registry: AdapterRegistry | undefined;
   private readonly turnRunner: TurnRunner | undefined;
+  private readonly gitService: GitService;
   private readonly startedAtMs: number;
   private readonly server: net.Server;
   private readonly authenticatedSockets = new WeakSet<net.Socket>();
@@ -103,6 +120,7 @@ export class DaemonRpcServer {
     this.authToken = options.authToken;
     this.registry = options.registry;
     this.turnRunner = options.turnRunner;
+    this.gitService = options.gitService ?? new GitService();
     this.startedAtMs = options.startedAtMs ?? Date.now();
     this.server = net.createServer((socket) => {
       this.handleConnection(socket);
@@ -175,6 +193,54 @@ export class DaemonRpcServer {
       if (!socket.destroyed && this.authenticatedSockets.has(socket)) {
         socket.write(serialized);
       }
+    }
+  }
+
+  private async enrichProjectWithGitStatus(
+    project: ProjectRecord,
+  ): Promise<ProjectWithGitStatus> {
+    if (!fs.existsSync(project.rootPath)) {
+      return {
+        ...project,
+        currentBranch: null,
+        isClean: null,
+        isValidGitRepo: false,
+        changedFileCount: 0,
+      };
+    }
+
+    try {
+      const valid = await this.gitService.isGitRepository(project.rootPath);
+      if (!valid) {
+        return {
+          ...project,
+          currentBranch: null,
+          isClean: null,
+          isValidGitRepo: false,
+          changedFileCount: 0,
+        };
+      }
+      const status = await this.gitService.getStatus(project.rootPath);
+      const changedFiles = new Set([
+        ...status.staged,
+        ...status.unstaged,
+        ...status.untracked,
+      ]);
+      return {
+        ...project,
+        currentBranch: status.branch,
+        isClean: status.isClean,
+        isValidGitRepo: true,
+        changedFileCount: changedFiles.size,
+      };
+    } catch {
+      return {
+        ...project,
+        currentBranch: null,
+        isClean: null,
+        isValidGitRepo: false,
+        changedFileCount: 0,
+      };
     }
   }
 
@@ -312,32 +378,221 @@ export class DaemonRpcServer {
           return makeSuccessResponse(request.id, { value: this.db.getKv(key) });
         }
 
-        case 'projects.list':
-          return makeSuccessResponse(request.id, { projects: this.db.listProjects() });
+        case 'projects.list': {
+          const records = this.db.listProjects();
+          const enriched = await Promise.all(
+            records.map((project) => this.enrichProjectWithGitStatus(project)),
+          );
+          return makeSuccessResponse(request.id, { projects: enriched });
+        }
 
         case 'projects.create': {
           const name = params['name'];
           const rootPath = params['rootPath'];
           const defaultBranch = params['defaultBranch'];
+          const testCommand = params['testCommand'];
           if (
-            typeof name !== 'string' ||
-            name.trim().length === 0 ||
             typeof rootPath !== 'string' ||
             rootPath.trim().length === 0 ||
-            (defaultBranch !== undefined && typeof defaultBranch !== 'string')
+            (name !== undefined && typeof name !== 'string') ||
+            (defaultBranch !== undefined && typeof defaultBranch !== 'string') ||
+            (testCommand !== undefined && testCommand !== null && typeof testCommand !== 'string')
           ) {
             return makeErrorResponse(
               request.id,
               JSONRPC_ERROR_CODE.INVALID_PARAMS,
-              'projects.create requires non-empty name and rootPath strings.',
+              'projects.create requires a valid rootPath directory string.',
             );
           }
-          const project = this.db.createProject({
-            name: name.trim(),
-            rootPath: rootPath.trim(),
-            defaultBranch: defaultBranch?.trim(),
+
+          const resolvedInput = path.resolve(rootPath.trim());
+          if (!fs.existsSync(resolvedInput) || !fs.statSync(resolvedInput).isDirectory()) {
+            return makeErrorResponse(
+              request.id,
+              JSONRPC_ERROR_CODE.INVALID_PARAMS,
+              `Directory does not exist: ${resolvedInput}`,
+            );
+          }
+
+          const canonicalRoot = fs.realpathSync(resolvedInput);
+          const validGit = await this.gitService.isGitRepository(canonicalRoot);
+          if (!validGit) {
+            return makeErrorResponse(
+              request.id,
+              JSONRPC_ERROR_CODE.INVALID_PARAMS,
+              `Selected folder is not a Git repository: ${canonicalRoot}`,
+            );
+          }
+
+          const liveBranch = await this.gitService.getCurrentBranch(canonicalRoot);
+          const resolvedName =
+            name && name.trim().length > 0 ? name.trim() : path.basename(canonicalRoot);
+
+          const created = this.db.createProject({
+            name: resolvedName,
+            rootPath: canonicalRoot,
+            defaultBranch: defaultBranch?.trim() || liveBranch,
+            testCommand,
           });
-          return makeSuccessResponse(request.id, { project });
+          const enriched = await this.enrichProjectWithGitStatus(created);
+          return makeSuccessResponse(request.id, { project: enriched });
+        }
+
+        case 'projects.update': {
+          const id = params['id'];
+          const name = params['name'];
+          const testCommand = params['testCommand'];
+          if (
+            typeof id !== 'string' ||
+            id.length === 0 ||
+            (name !== undefined && typeof name !== 'string') ||
+            (testCommand !== undefined && testCommand !== null && typeof testCommand !== 'string')
+          ) {
+            return makeErrorResponse(
+              request.id,
+              JSONRPC_ERROR_CODE.INVALID_PARAMS,
+              'projects.update requires a valid project id.',
+            );
+          }
+          const updated = this.db.updateProject(id, { name, testCommand });
+          const enriched = await this.enrichProjectWithGitStatus(updated);
+          return makeSuccessResponse(request.id, { project: enriched });
+        }
+
+        case 'projects.delete': {
+          const id = params['id'];
+          if (typeof id !== 'string' || id.length === 0) {
+            return makeErrorResponse(
+              request.id,
+              JSONRPC_ERROR_CODE.INVALID_PARAMS,
+              'projects.delete requires a non-empty project id.',
+            );
+          }
+          return makeSuccessResponse(request.id, { deleted: this.db.deleteProject(id) });
+        }
+
+        case 'chats.list': {
+          const projectId = params['projectId'];
+          const includeArchived = params['includeArchived'];
+          if (
+            typeof projectId !== 'string' ||
+            projectId.length === 0 ||
+            (includeArchived !== undefined && typeof includeArchived !== 'boolean')
+          ) {
+            return makeErrorResponse(
+              request.id,
+              JSONRPC_ERROR_CODE.INVALID_PARAMS,
+              'chats.list requires a valid projectId.',
+            );
+          }
+          return makeSuccessResponse(request.id, {
+            chats: this.db.listChats(projectId, includeArchived ?? false),
+          });
+        }
+
+        case 'chats.create': {
+          const projectId = params['projectId'];
+          const title = params['title'];
+          if (
+            typeof projectId !== 'string' ||
+            projectId.length === 0 ||
+            (title !== undefined && typeof title !== 'string')
+          ) {
+            return makeErrorResponse(
+              request.id,
+              JSONRPC_ERROR_CODE.INVALID_PARAMS,
+              'chats.create requires a valid projectId.',
+            );
+          }
+          const chat = this.db.createChat(projectId, title);
+          return makeSuccessResponse(request.id, { chat });
+        }
+
+        case 'chats.rename': {
+          const id = params['id'];
+          const title = params['title'];
+          if (
+            typeof id !== 'string' ||
+            id.length === 0 ||
+            typeof title !== 'string' ||
+            title.trim().length === 0
+          ) {
+            return makeErrorResponse(
+              request.id,
+              JSONRPC_ERROR_CODE.INVALID_PARAMS,
+              'chats.rename requires non-empty id and title.',
+            );
+          }
+          return makeSuccessResponse(request.id, { chat: this.db.renameChat(id, title) });
+        }
+
+        case 'chats.archive': {
+          const id = params['id'];
+          const archived = params['archived'];
+          if (typeof id !== 'string' || id.length === 0 || typeof archived !== 'boolean') {
+            return makeErrorResponse(
+              request.id,
+              JSONRPC_ERROR_CODE.INVALID_PARAMS,
+              'chats.archive requires id and boolean archived flag.',
+            );
+          }
+          return makeSuccessResponse(request.id, { chat: this.db.archiveChat(id, archived) });
+        }
+
+        case 'chats.delete': {
+          const id = params['id'];
+          if (typeof id !== 'string' || id.length === 0) {
+            return makeErrorResponse(
+              request.id,
+              JSONRPC_ERROR_CODE.INVALID_PARAMS,
+              'chats.delete requires a non-empty chat id.',
+            );
+          }
+          return makeSuccessResponse(request.id, { deleted: this.db.deleteChat(id) });
+        }
+
+        case 'messages.list': {
+          const chatId = params['chatId'];
+          if (typeof chatId !== 'string' || chatId.length === 0) {
+            return makeErrorResponse(
+              request.id,
+              JSONRPC_ERROR_CODE.INVALID_PARAMS,
+              'messages.list requires a valid chatId.',
+            );
+          }
+          return makeSuccessResponse(request.id, { messages: this.db.listMessages(chatId) });
+        }
+
+        case 'messages.append': {
+          const chatId = params['chatId'];
+          const role = params['role'];
+          const providerId = params['providerId'];
+          const modelId = params['modelId'];
+          const content = params['content'];
+
+          if (
+            typeof chatId !== 'string' ||
+            chatId.length === 0 ||
+            !isMessageRole(role) ||
+            !isOptionalProviderIdOrNull(providerId) ||
+            (modelId !== undefined && modelId !== null && typeof modelId !== 'string') ||
+            typeof content !== 'string'
+          ) {
+            return makeErrorResponse(
+              request.id,
+              JSONRPC_ERROR_CODE.INVALID_PARAMS,
+              'messages.append requires valid chatId, role, and content.',
+            );
+          }
+
+          const message = this.db.appendMessage({
+            chatId,
+            role,
+            providerId,
+            modelId,
+            content,
+          });
+          return makeSuccessResponse(request.id, { message });
         }
 
         case 'adapters.list': {

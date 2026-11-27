@@ -2,6 +2,7 @@ import type {
   AdapterSummary,
   AgentRole,
   ApprovalMode,
+  ProviderId,
   TurnEventNotificationParams,
 } from './adapter.js';
 
@@ -27,8 +28,37 @@ export interface ProjectRecord {
   readonly name: string;
   readonly rootPath: string;
   readonly defaultBranch: string;
+  readonly testCommand: string | null;
   readonly createdAt: string;
   readonly updatedAt: string;
+}
+
+export interface ProjectWithGitStatus extends ProjectRecord {
+  readonly currentBranch: string | null;
+  readonly isClean: boolean | null;
+  readonly isValidGitRepo: boolean;
+  readonly changedFileCount: number;
+}
+
+export interface ChatRecord {
+  readonly id: string;
+  readonly projectId: string;
+  readonly title: string;
+  readonly archivedAt: string | null;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+export type MessageRole = 'user' | 'assistant' | 'system';
+
+export interface MessageRecord {
+  readonly id: string;
+  readonly chatId: string;
+  readonly role: MessageRole;
+  readonly providerId: ProviderId | null;
+  readonly modelId: string | null;
+  readonly content: string;
+  readonly createdAt: string;
 }
 
 export interface DaemonHealthResult {
@@ -76,17 +106,100 @@ export interface KvGetResult {
 }
 
 export interface ProjectsListResult {
-  readonly projects: readonly ProjectRecord[];
+  readonly projects: readonly ProjectWithGitStatus[];
 }
 
 export interface ProjectsCreateParams {
-  readonly name: string;
+  readonly name?: string | undefined;
   readonly rootPath: string;
   readonly defaultBranch?: string | undefined;
+  readonly testCommand?: string | null | undefined;
 }
 
 export interface ProjectsCreateResult {
-  readonly project: ProjectRecord;
+  readonly project: ProjectWithGitStatus;
+}
+
+export interface ProjectsUpdateParams {
+  readonly id: string;
+  readonly name?: string | undefined;
+  readonly testCommand?: string | null | undefined;
+}
+
+export interface ProjectsUpdateResult {
+  readonly project: ProjectWithGitStatus;
+}
+
+export interface ProjectsDeleteParams {
+  readonly id: string;
+}
+
+export interface ProjectsDeleteResult {
+  readonly deleted: boolean;
+}
+
+export interface ChatsListParams {
+  readonly projectId: string;
+  readonly includeArchived?: boolean | undefined;
+}
+
+export interface ChatsListResult {
+  readonly chats: readonly ChatRecord[];
+}
+
+export interface ChatsCreateParams {
+  readonly projectId: string;
+  readonly title?: string | undefined;
+}
+
+export interface ChatsCreateResult {
+  readonly chat: ChatRecord;
+}
+
+export interface ChatsRenameParams {
+  readonly id: string;
+  readonly title: string;
+}
+
+export interface ChatsRenameResult {
+  readonly chat: ChatRecord;
+}
+
+export interface ChatsArchiveParams {
+  readonly id: string;
+  readonly archived: boolean;
+}
+
+export interface ChatsArchiveResult {
+  readonly chat: ChatRecord;
+}
+
+export interface ChatsDeleteParams {
+  readonly id: string;
+}
+
+export interface ChatsDeleteResult {
+  readonly deleted: boolean;
+}
+
+export interface MessagesListParams {
+  readonly chatId: string;
+}
+
+export interface MessagesListResult {
+  readonly messages: readonly MessageRecord[];
+}
+
+export interface MessagesAppendParams {
+  readonly chatId: string;
+  readonly role: MessageRole;
+  readonly providerId?: ProviderId | null | undefined;
+  readonly modelId?: string | null | undefined;
+  readonly content: string;
+}
+
+export interface MessagesAppendResult {
+  readonly message: MessageRecord;
 }
 
 export interface AdaptersListResult {
@@ -146,6 +259,42 @@ export interface DaemonMethodMap {
   'projects.create': {
     params: ProjectsCreateParams;
     result: ProjectsCreateResult;
+  };
+  'projects.update': {
+    params: ProjectsUpdateParams;
+    result: ProjectsUpdateResult;
+  };
+  'projects.delete': {
+    params: ProjectsDeleteParams;
+    result: ProjectsDeleteResult;
+  };
+  'chats.list': {
+    params: ChatsListParams;
+    result: ChatsListResult;
+  };
+  'chats.create': {
+    params: ChatsCreateParams;
+    result: ChatsCreateResult;
+  };
+  'chats.rename': {
+    params: ChatsRenameParams;
+    result: ChatsRenameResult;
+  };
+  'chats.archive': {
+    params: ChatsArchiveParams;
+    result: ChatsArchiveResult;
+  };
+  'chats.delete': {
+    params: ChatsDeleteParams;
+    result: ChatsDeleteResult;
+  };
+  'messages.list': {
+    params: MessagesListParams;
+    result: MessagesListResult;
+  };
+  'messages.append': {
+    params: MessagesAppendParams;
+    result: MessagesAppendResult;
   };
   'adapters.list': {
     params: EmptyParams;

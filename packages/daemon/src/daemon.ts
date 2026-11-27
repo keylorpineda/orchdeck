@@ -5,6 +5,7 @@ import { AdapterRegistry } from './adapters/adapter-registry.js';
 import { createDefaultMockAdapters } from './adapters/mock-adapter.js';
 import { TurnRunner } from './adapters/turn-runner.js';
 import { DaemonDatabase } from './db/database.js';
+import { GitService } from './git/git-service.js';
 import { DaemonRpcServer } from './ipc/server.js';
 import { resolveDefaultDataDir, resolveSocketPath } from './ipc/socket-path.js';
 
@@ -14,6 +15,7 @@ export interface StartDaemonOptions {
   readonly socketPath?: string | undefined;
   readonly authToken?: string | undefined;
   readonly adapters?: readonly ProviderAdapter[] | undefined;
+  readonly gitService?: GitService | undefined;
 }
 
 export interface RunningDaemon {
@@ -32,6 +34,7 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Run
 
   const db = new DaemonDatabase(dbPath);
   const registry = new AdapterRegistry(options.adapters ?? createDefaultMockAdapters());
+  const gitService = options.gitService ?? new GitService();
 
   let server: DaemonRpcServer | null = null;
   const turnRunner = new TurnRunner({
@@ -48,6 +51,7 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Run
     authToken,
     registry,
     turnRunner,
+    gitService,
   });
 
   try {
