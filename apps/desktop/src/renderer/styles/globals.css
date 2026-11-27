@@ -1,0 +1,73 @@
+@import 'tailwindcss';
+@import './tokens.css';
+
+@theme {
+  --color-canvas: var(--bg-canvas);
+  --color-sidebar: var(--bg-sidebar);
+  --color-surface: var(--bg-surface);
+  --color-inset: var(--bg-inset);
+  --color-border-subtle: var(--border-subtle);
+  --color-border-strong: var(--border-strong);
+  --color-ink: var(--text-primary);
+  --color-ink-secondary: var(--text-secondary);
+  --color-ink-tertiary: var(--text-tertiary);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-soft: var(--accent-soft);
+  --color-pass: var(--pass-text);
+  --color-pass-bg: var(--pass-bg);
+  --color-fail: var(--fail-text);
+  --color-fail-bg: var(--fail-bg);
+  --color-warn: var(--warn-text);
+  --color-warn-bg: var(--warn-bg);
+  --color-engine-claude: var(--engine-claude);
+  --color-engine-codex: var(--engine-codex);
+  --color-engine-antigravity: var(--engine-antigravity);
+
+  --font-sans: 'IBM Plex Sans', system-ui, -apple-system, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, monospace;
+  --font-editorial: 'Newsreader', Georgia, serif;
+
+  --radius-modal: 10px;
+  --radius-card: 8px;
+  --radius-control: 6px;
+  --radius-chip: 4px;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+    margin: 0;
+    background-color: var(--bg-canvas);
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.58;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  * {
+    box-sizing: border-box;
+    border-color: var(--border-subtle);
+  }
+}
+
+.tabular-mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.surface-card {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  box-shadow: var(--surface-highlight);
+}
+
+.orch-transition {
+  transition-property: background-color, border-color, color, opacity;
+  transition-duration: 120ms;
+  transition-timing-function: cubic-bezier(0.2, 0, 0, 1);
+}

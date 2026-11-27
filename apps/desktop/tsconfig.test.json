@@ -4,5 +4,10 @@
     "noEmit": true,
     "types": ["node"]
   },
-  "include": ["src/main/**/*.ts", "vite.config.ts", "vitest.config.ts"]
+  "include": [
+    "src/main/**/*.ts",
+    "src/renderer/**/*.test.ts",
+    "vite.config.ts",
+    "vitest.config.ts"
+  ]
 }
