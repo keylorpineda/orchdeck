@@ -116,4 +116,25 @@ export const INITIAL_MIGRATIONS: readonly Migration[] = [
         ON project_memory(project_id, category, updated_at DESC);
     `,
   },
+  {
+    version: 6,
+    name: 'task_metrics_v1',
+    sql: `
+      CREATE TABLE IF NOT EXISTS task_metrics (
+        id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        tag TEXT NOT NULL,
+        provider_id TEXT NOT NULL,
+        model_handle TEXT NOT NULL,
+        recipe_id TEXT,
+        approved_first_pass INTEGER NOT NULL,
+        iterations INTEGER NOT NULL DEFAULT 1,
+        duration_ms INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_task_metrics_proj_tag
+        ON task_metrics(project_id, tag, created_at DESC);
+    `,
+  },
 ];

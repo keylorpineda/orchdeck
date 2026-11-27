@@ -834,6 +834,79 @@ function registerIpcHandlers(): void {
     }
     return supervisor.getClient().call('memory.importDoc', { projectId, target });
   });
+
+  ipcMain.handle('orchdeck:metrics-record-task', async (_event, rawParams: unknown) => {
+    const params = asObject(rawParams, 'orchdeck:metrics-record-task');
+    const projectId = params['projectId'];
+    const tag = params['tag'];
+    const modelHandle = params['modelHandle'];
+    const recipeId = params['recipeId'];
+    const approvedFirstPass = params['approvedFirstPass'];
+    const iterations = params['iterations'];
+    const durationMs = params['durationMs'];
+    if (
+      typeof projectId !== 'string' ||
+      projectId.length === 0 ||
+      (tag !== 'feature' &&
+        tag !== 'bugfix' &&
+        tag !== 'refactor' &&
+        tag !== 'test' &&
+        tag !== 'docs') ||
+      typeof modelHandle !== 'string' ||
+      modelHandle.length === 0 ||
+      typeof approvedFirstPass !== 'boolean'
+    ) {
+      throw new Error('Invalid params for orchdeck:metrics-record-task.');
+    }
+    return supervisor.getClient().call('metrics.recordTask', {
+      projectId,
+      tag,
+      modelHandle,
+      recipeId: typeof recipeId === 'string' ? recipeId : null,
+      approvedFirstPass,
+      iterations: typeof iterations === 'number' ? iterations : undefined,
+      durationMs: typeof durationMs === 'number' ? durationMs : undefined,
+    });
+  });
+
+  ipcMain.handle('orchdeck:metrics-recommend', async (_event, rawParams: unknown) => {
+    const params = asObject(rawParams, 'orchdeck:metrics-recommend');
+    const projectId = params['projectId'];
+    const tag = params['tag'];
+    const prompt = params['prompt'];
+    const availableHandles = params['availableHandles'];
+    if (typeof projectId !== 'string' || projectId.length === 0) {
+      throw new Error('Invalid projectId for orchdeck:metrics-recommend.');
+    }
+    return supervisor.getClient().call('metrics.recommend', {
+      projectId,
+      tag:
+        tag === 'feature' ||
+        tag === 'bugfix' ||
+        tag === 'refactor' ||
+        tag === 'test' ||
+        tag === 'docs'
+          ? tag
+          : undefined,
+      prompt: typeof prompt === 'string' ? prompt : undefined,
+      availableHandles: Array.isArray(availableHandles)
+        ? availableHandles.filter((h): h is string => typeof h === 'string')
+        : undefined,
+    });
+  });
+
+  ipcMain.handle('orchdeck:metrics-get-heuristics', async () => {
+    return supervisor.getClient().call('metrics.getHeuristics', {});
+  });
+
+  ipcMain.handle('orchdeck:metrics-set-heuristics', async (_event, rawParams: unknown) => {
+    const params = asObject(rawParams, 'orchdeck:metrics-set-heuristics');
+    const heuristics = params['heuristics'];
+    if (!Array.isArray(heuristics)) {
+      throw new Error('Invalid params for orchdeck:metrics-set-heuristics.');
+    }
+    return supervisor.getClient().call('metrics.setHeuristics', { heuristics });
+  });
 }
 
 function configureSecurityHeaders(): void {

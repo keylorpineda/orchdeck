@@ -1,11 +1,13 @@
 import { GitBranch, PaperPlaneRight, Scales, Stop, Trash } from '@phosphor-icons/react';
 import { useRef, useState, type FormEvent } from 'react';
 import {
+  TASK_TAGS,
   parseInlineMention,
   type ApprovalMode,
   type ChangeCardSnapshot,
   type ChatRecord,
   type MessageRecord,
+  type ModelRecommendation,
   type ProjectWithGitStatus,
   type RecipeCreateParams,
   type RecipeRecord,
@@ -13,6 +15,7 @@ import {
   type SecondOpinionRecord,
   type SecondOpinionResolution,
   type TaskRunRecord,
+  type TaskTag,
   type TestRunResult,
 } from '@orchdeck/shared';
 import {
@@ -71,6 +74,9 @@ export interface ChatWorkspaceProps {
   readonly worktreeBusy?: boolean | undefined;
   readonly changeError: string | null;
   readonly changeNotice: string | null;
+  readonly taskTag?: TaskTag | undefined;
+  readonly recommendation?: ModelRecommendation | null | undefined;
+  readonly onChangeTaskTag?: ((tag: TaskTag) => void) | undefined;
   readonly onChangeChatModel: (handle: string) => void;
   readonly onChangeTurnOverride: (handle: string | null) => void;
   readonly onChangeApprovalMode: (mode: ApprovalMode) => void;
@@ -128,6 +134,9 @@ export function ChatWorkspace({
   worktreeBusy = false,
   changeError,
   changeNotice,
+  taskTag = 'feature',
+  recommendation = null,
+  onChangeTaskTag,
   onChangeChatModel,
   onChangeTurnOverride,
   onChangeApprovalMode,
@@ -467,6 +476,43 @@ export function ChatWorkspace({
               onSelectChatModel={onChangeChatModel}
               onSelectTurnOverride={onChangeTurnOverride}
             />
+            {onChangeTaskTag ? (
+              <select
+                aria-label={dict.taskTagLabel}
+                value={taskTag}
+                onChange={(e) => onChangeTaskTag(e.target.value as TaskTag)}
+                className="tabular-mono rounded-[6px] border border-border-subtle bg-inset px-2 py-1 text-[11px] text-ink-secondary outline-none hover:border-border-strong"
+              >
+                {TASK_TAGS.map((tagOpt) => (
+                  <option key={tagOpt} value={tagOpt}>
+                    {tagOpt}
+                  </option>
+                ))}
+              </select>
+            ) : null}
+            {recommendation ? (
+              <div
+                className="inline-flex items-center gap-1.5 rounded-[4px] border border-border-subtle bg-inset px-2 py-0.5 text-[11px] text-ink-secondary"
+                title={recommendation.reason}
+              >
+                <span className="font-medium text-ink">
+                  {dict.recommendedLabel}:{' '}
+                  {formatModelLabel(recommendation.recommendedHandle, modelOptions)}
+                </span>
+                <span className="hidden max-w-[190px] truncate text-ink-tertiary sm:inline">
+                  · {recommendation.reason}
+                </span>
+                {recommendation.recommendedHandle !== effectiveHandle ? (
+                  <button
+                    type="button"
+                    onClick={() => onChangeChatModel(recommendation.recommendedHandle)}
+                    className="rounded-[3px] bg-accent-soft px-1.5 py-0.5 text-[10px] font-medium text-accent hover:bg-accent hover:text-surface"
+                  >
+                    {dict.useSuggested}
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
             <RecipePicker
               recipes={recipes}
               selectedRecipeId={selectedRecipeId}
