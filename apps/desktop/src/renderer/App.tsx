@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   parseModelHandle,
+  type ChangeCardSnapshot,
   type ChatRecord,
   type MessageRecord,
   type ProjectWithGitStatus,
+  type TestRunResult,
   type TurnEventNotificationParams,
 } from '@orchdeck/shared';
 import { ChatWorkspace, type MessageTurnMeta } from './components/ChatWorkspace';
@@ -36,11 +38,37 @@ function WorkbenchApp() {
   const [turnOverrideHandle, setTurnOverrideHandle] = useState<string | null>(null);
   const [streaming, setStreaming] = useState<StreamingTurnState | null>(null);
   const [bridgeError, setBridgeError] = useState<string | null>(null);
+  const [changeSnapshot, setChangeSnapshot] = useState<ChangeCardSnapshot | null>(null);
+  const [testResult, setTestResult] = useState<TestRunResult | null>(null);
+  const [loadingChanges, setLoadingChanges] = useState(false);
+  const [runningTests, setRunningTests] = useState(false);
+  const [committingChanges, setCommittingChanges] = useState(false);
+  const [discardingChanges, setDiscardingChanges] = useState(false);
+  const [changeError, setChangeError] = useState<string | null>(null);
+  const [changeNotice, setChangeNotice] = useState<string | null>(null);
 
   const streamingRef = useRef<StreamingTurnState | null>(null);
   const activeChatRef = useRef<string | null>(null);
   streamingRef.current = streaming;
   activeChatRef.current = selectedChatId;
+
+  const refreshChangeCard = useCallback(async (projectId: string | null): Promise<void> => {
+    const api = window.orchdeck;
+    if (!api || !projectId) {
+      setChangeSnapshot(null);
+      return;
+    }
+    setLoadingChanges(true);
+    setChangeError(null);
+    try {
+      const { snapshot } = await api.inspectChanges(projectId);
+      setChangeSnapshot(snapshot);
+    } catch (err) {
+      setChangeError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoadingChanges(false);
+    }
+  }, []);
 
   const refreshChatsForProject = useCallback(
     async (projectId: string, showArchived = includeArchived): Promise<readonly ChatRecord[]> => {
@@ -86,6 +114,9 @@ function WorkbenchApp() {
       const firstProject = loadedProjects[0] ?? null;
       if (firstProject) {
         setSelectedProjectId(firstProject.id);
+        if (firstProject.isValidGitRepo) {
+          void refreshChangeCard(firstProject.id);
+        }
         const firstChat = chatMap[firstProject.id]?.[0] ?? null;
         if (firstChat) {
           setSelectedChatId(firstChat.id);
@@ -144,15 +175,23 @@ function WorkbenchApp() {
             const { messages: updated } = await api.listMessages(targetChatId);
             setMessages(updated);
             if (selectedProjectId) {
-              await refreshChatsForProject(selectedProjectId);
+              const [{ projects: refreshedProjects }] = await Promise.all([
+                api.listProjects(),
+                refreshChatsForProject(selectedProjectId),
+                refreshChangeCard(selectedProjectId),
+              ]);
+              setProjects(refreshedProjects);
             }
           });
       }
     });
-  }, [refreshChatsForProject, selectedProjectId]);
+  }, [refreshChangeCard, refreshChatsForProject, selectedProjectId]);
 
   const handleSelectProject = (projectId: string): void => {
     setSelectedProjectId(projectId);
+    setTestResult(null);
+    setChangeNotice(null);
+    void refreshChangeCard(projectId);
     const chats = chatsByProject[projectId] ?? [];
     const nextChatId = chats[0]?.id ?? null;
     setSelectedChatId(nextChatId);
@@ -339,6 +378,77 @@ function WorkbenchApp() {
     await window.orchdeck?.cancelTurn(turnId);
   };
 
+  const handleRunTests = async (): Promise<void> => {
+    const api = window.orchdeck;
+    if (!api || !selectedProjectId) {
+      return;
+    }
+    setRunningTests(true);
+    setChangeError(null);
+    try {
+      const { result } = await api.runProjectTests(selectedProjectId);
+      setTestResult(result);
+    } catch (err) {
+      setChangeError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setRunningTests(false);
+    }
+  };
+
+  const handleApproveChanges = async (commitMessage: string): Promise<void> => {
+    const api = window.orchdeck;
+    if (!api || !selectedProjectId) {
+      return;
+    }
+    setCommittingChanges(true);
+    setChangeError(null);
+    setChangeNotice(null);
+    try {
+      const { branch, commitSha } = await api.approveChanges({
+        projectId: selectedProjectId,
+        commitMessage,
+        branchSlug: deriveChatTitleFromPrompt(commitMessage),
+      });
+      const [{ projects: refreshedProjects }] = await Promise.all([
+        api.listProjects(),
+        refreshChangeCard(selectedProjectId),
+      ]);
+      setProjects(refreshedProjects);
+      setChangeNotice(`Committed ${commitSha.slice(0, 7)} cleanly on ${branch}.`);
+    } catch (err) {
+      setChangeError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setCommittingChanges(false);
+    }
+  };
+
+  const handleDiscardChanges = async (): Promise<void> => {
+    const api = window.orchdeck;
+    if (!api || !selectedProjectId) {
+      return;
+    }
+    setDiscardingChanges(true);
+    setChangeError(null);
+    setChangeNotice(null);
+    try {
+      const result = await api.discardChanges(selectedProjectId);
+      const [{ projects: refreshedProjects }] = await Promise.all([
+        api.listProjects(),
+        refreshChangeCard(selectedProjectId),
+      ]);
+      setProjects(refreshedProjects);
+      setChangeNotice(
+        result.stashCreated
+          ? `Discarded working changes cleanly (stash backup ${result.stashRef?.slice(0, 7) ?? 'stash@{0}'}).`
+          : 'Working tree had no pending changes.',
+      );
+    } catch (err) {
+      setChangeError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setDiscardingChanges(false);
+    }
+  };
+
   const activeProject = projects.find((p) => p.id === selectedProjectId) ?? null;
   const activeChats = activeProject ? (chatsByProject[activeProject.id] ?? []) : [];
   const activeChat = activeChats.find((c) => c.id === selectedChatId) ?? null;
@@ -383,11 +493,23 @@ function WorkbenchApp() {
         modelOptions={modelOptions}
         chatModelHandle={chatModelHandle}
         turnOverrideHandle={turnOverrideHandle}
+        changeSnapshot={changeSnapshot}
+        testResult={testResult}
+        loadingChanges={loadingChanges}
+        runningTests={runningTests}
+        committingChanges={committingChanges}
+        discardingChanges={discardingChanges}
+        changeError={changeError}
+        changeNotice={changeNotice}
         onChangeChatModel={setChatModelHandle}
         onChangeTurnOverride={setTurnOverrideHandle}
         onSendPrompt={handleSendPrompt}
         onCancelTurn={handleCancelTurn}
         onCreateChat={handleCreateChat}
+        onRefreshChanges={() => refreshChangeCard(selectedProjectId)}
+        onRunTests={handleRunTests}
+        onApproveChanges={handleApproveChanges}
+        onDiscardChanges={handleDiscardChanges}
       />
     </WorkbenchShell>
   );

@@ -1,6 +1,11 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
 import type {
   AdaptersListResult,
+  ChangesApproveParams,
+  ChangesApproveResult,
+  ChangesDiscardResult,
+  ChangesInspectResult,
+  ChangesRunTestsResult,
   ChatsArchiveParams,
   ChatsArchiveResult,
   ChatsCreateParams,
@@ -52,6 +57,10 @@ interface OrchdeckBridge {
   listAdapters(): Promise<AdaptersListResult>;
   startTurn(params: TurnStartParams): Promise<TurnStartResult>;
   cancelTurn(turnId: string): Promise<TurnCancelResult>;
+  inspectChanges(projectId: string): Promise<ChangesInspectResult>;
+  runProjectTests(projectId: string): Promise<ChangesRunTestsResult>;
+  approveChanges(params: ChangesApproveParams): Promise<ChangesApproveResult>;
+  discardChanges(projectId: string): Promise<ChangesDiscardResult>;
   onTurnEvent(listener: (event: TurnEventNotificationParams) => void): () => void;
 }
 
@@ -87,6 +96,14 @@ const bridge: OrchdeckBridge = {
     ipcRenderer.invoke('orchdeck:turn-start', params) as Promise<TurnStartResult>,
   cancelTurn: (turnId: string) =>
     ipcRenderer.invoke('orchdeck:turn-cancel', turnId) as Promise<TurnCancelResult>,
+  inspectChanges: (projectId: string) =>
+    ipcRenderer.invoke('orchdeck:changes-inspect', projectId) as Promise<ChangesInspectResult>,
+  runProjectTests: (projectId: string) =>
+    ipcRenderer.invoke('orchdeck:changes-run-tests', projectId) as Promise<ChangesRunTestsResult>,
+  approveChanges: (params: ChangesApproveParams) =>
+    ipcRenderer.invoke('orchdeck:changes-approve', params) as Promise<ChangesApproveResult>,
+  discardChanges: (projectId: string) =>
+    ipcRenderer.invoke('orchdeck:changes-discard', projectId) as Promise<ChangesDiscardResult>,
   onTurnEvent: (listener: (event: TurnEventNotificationParams) => void) => {
     const handler = (_ipcEvent: IpcRendererEvent, payload: TurnEventNotificationParams): void => {
       listener(payload);

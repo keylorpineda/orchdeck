@@ -668,6 +668,112 @@ export class DaemonRpcServer {
           return makeSuccessResponse(request.id, { cancelled });
         }
 
+        case 'changes.inspect': {
+          const projectId = params['projectId'];
+          if (typeof projectId !== 'string' || projectId.length === 0) {
+            return makeErrorResponse(
+              request.id,
+              JSONRPC_ERROR_CODE.INVALID_PARAMS,
+              'changes.inspect requires non-empty projectId string.',
+            );
+          }
+          const project = this.db.getProject(projectId);
+          if (!project) {
+            return makeErrorResponse(
+              request.id,
+              JSONRPC_ERROR_CODE.INVALID_PARAMS,
+              `Project not found: ${projectId}`,
+            );
+          }
+          const snapshot = await this.gitService.getChangeCardSnapshot(project.rootPath);
+          return makeSuccessResponse(request.id, { snapshot });
+        }
+
+        case 'changes.runTests': {
+          const projectId = params['projectId'];
+          if (typeof projectId !== 'string' || projectId.length === 0) {
+            return makeErrorResponse(
+              request.id,
+              JSONRPC_ERROR_CODE.INVALID_PARAMS,
+              'changes.runTests requires non-empty projectId string.',
+            );
+          }
+          const project = this.db.getProject(projectId);
+          if (!project) {
+            return makeErrorResponse(
+              request.id,
+              JSONRPC_ERROR_CODE.INVALID_PARAMS,
+              `Project not found: ${projectId}`,
+            );
+          }
+          if (!project.testCommand || project.testCommand.trim().length === 0) {
+            return makeErrorResponse(
+              request.id,
+              JSONRPC_ERROR_CODE.INVALID_PARAMS,
+              `Project "${project.name}" does not have a configured test command.`,
+            );
+          }
+          const result = await this.gitService.runProjectTests(project.rootPath, project.testCommand);
+          return makeSuccessResponse(request.id, { result });
+        }
+
+        case 'changes.approve': {
+          const projectId = params['projectId'];
+          const commitMessage = params['commitMessage'];
+          const branchSlug = params['branchSlug'];
+          if (
+            typeof projectId !== 'string' ||
+            projectId.length === 0 ||
+            typeof commitMessage !== 'string' ||
+            commitMessage.trim().length === 0 ||
+            (branchSlug !== undefined && typeof branchSlug !== 'string')
+          ) {
+            return makeErrorResponse(
+              request.id,
+              JSONRPC_ERROR_CODE.INVALID_PARAMS,
+              'changes.approve requires projectId and non-empty commitMessage.',
+            );
+          }
+          const project = this.db.getProject(projectId);
+          if (!project) {
+            return makeErrorResponse(
+              request.id,
+              JSONRPC_ERROR_CODE.INVALID_PARAMS,
+              `Project not found: ${projectId}`,
+            );
+          }
+          const branch = await this.gitService.ensureTaskBranch(
+            project.rootPath,
+            branchSlug?.trim() || `review-${Date.now()}`,
+          );
+          const commitSha = await this.gitService.commitApprovedChanges(
+            project.rootPath,
+            commitMessage,
+          );
+          return makeSuccessResponse(request.id, { branch, commitSha });
+        }
+
+        case 'changes.discard': {
+          const projectId = params['projectId'];
+          if (typeof projectId !== 'string' || projectId.length === 0) {
+            return makeErrorResponse(
+              request.id,
+              JSONRPC_ERROR_CODE.INVALID_PARAMS,
+              'changes.discard requires non-empty projectId string.',
+            );
+          }
+          const project = this.db.getProject(projectId);
+          if (!project) {
+            return makeErrorResponse(
+              request.id,
+              JSONRPC_ERROR_CODE.INVALID_PARAMS,
+              `Project not found: ${projectId}`,
+            );
+          }
+          const discardResult = await this.gitService.discardChangesWithBackup(project.rootPath);
+          return makeSuccessResponse(request.id, discardResult);
+        }
+
         default:
           return makeErrorResponse(
             request.id,

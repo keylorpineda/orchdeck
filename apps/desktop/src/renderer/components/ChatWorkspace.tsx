@@ -1,12 +1,19 @@
 import { PaperPlaneRight, Stop } from '@phosphor-icons/react';
-import { useState, type FormEvent } from 'react';
-import type { ChatRecord, MessageRecord, ProjectWithGitStatus } from '@orchdeck/shared';
+import { useRef, useState, type FormEvent } from 'react';
+import type {
+  ChangeCardSnapshot,
+  ChatRecord,
+  MessageRecord,
+  ProjectWithGitStatus,
+  TestRunResult,
+} from '@orchdeck/shared';
 import {
   formatModelLabel,
   type ModelOption,
   type StreamingTurnState,
   type ToolActivityEntry,
 } from '../state/turn-stream';
+import { ChangeCard } from './ChangeCard';
 import { EngineMark } from './EngineMark';
 import { MarkdownContent } from './MarkdownContent';
 import { ModelPicker } from './ModelPicker';
@@ -27,11 +34,23 @@ export interface ChatWorkspaceProps {
   readonly modelOptions: readonly ModelOption[];
   readonly chatModelHandle: string;
   readonly turnOverrideHandle: string | null;
+  readonly changeSnapshot: ChangeCardSnapshot | null;
+  readonly testResult: TestRunResult | null;
+  readonly loadingChanges: boolean;
+  readonly runningTests: boolean;
+  readonly committingChanges: boolean;
+  readonly discardingChanges: boolean;
+  readonly changeError: string | null;
+  readonly changeNotice: string | null;
   readonly onChangeChatModel: (handle: string) => void;
   readonly onChangeTurnOverride: (handle: string | null) => void;
   readonly onSendPrompt: (prompt: string) => Promise<void>;
   readonly onCancelTurn: (turnId: string) => Promise<void>;
   readonly onCreateChat: (projectId: string) => Promise<void>;
+  readonly onRefreshChanges: () => Promise<void>;
+  readonly onRunTests: () => Promise<void>;
+  readonly onApproveChanges: (commitMessage: string) => Promise<void>;
+  readonly onDiscardChanges: () => Promise<void>;
 }
 
 export function ChatWorkspace({
@@ -43,14 +62,27 @@ export function ChatWorkspace({
   modelOptions,
   chatModelHandle,
   turnOverrideHandle,
+  changeSnapshot,
+  testResult,
+  loadingChanges,
+  runningTests,
+  committingChanges,
+  discardingChanges,
+  changeError,
+  changeNotice,
   onChangeChatModel,
   onChangeTurnOverride,
   onSendPrompt,
   onCancelTurn,
   onCreateChat,
+  onRefreshChanges,
+  onRunTests,
+  onApproveChanges,
+  onDiscardChanges,
 }: ChatWorkspaceProps) {
   const [prompt, setPrompt] = useState('');
   const [sending, setSending] = useState(false);
+  const composerRef = useRef<HTMLTextAreaElement | null>(null);
 
   const effectiveHandle = turnOverrideHandle ?? chatModelHandle;
 
@@ -210,8 +242,32 @@ export function ChatWorkspace({
         ) : null}
       </div>
 
+      {project.isValidGitRepo ? (
+        <ChangeCard
+          branchName={project.currentBranch}
+          testCommand={project.testCommand}
+          snapshot={changeSnapshot}
+          testResult={testResult}
+          loading={loadingChanges}
+          runningTests={runningTests}
+          committing={committingChanges}
+          discarding={discardingChanges}
+          errorMessage={changeError}
+          lastNotice={changeNotice}
+          onRefresh={onRefreshChanges}
+          onRunTests={onRunTests}
+          onApprove={onApproveChanges}
+          onDiscard={onDiscardChanges}
+          onRequestChanges={(contextSummary) => {
+            setPrompt((prev) => (prev.trim().length === 0 ? contextSummary : prev));
+            composerRef.current?.focus();
+          }}
+        />
+      ) : null}
+
       <form onSubmit={(e) => void handleSubmit(e)} className="surface-card p-3">
         <textarea
+          ref={composerRef}
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
           onKeyDown={(e) => {

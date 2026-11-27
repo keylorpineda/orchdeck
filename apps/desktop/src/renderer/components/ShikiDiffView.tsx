@@ -1,0 +1,209 @@
+import { useEffect, useMemo, useState } from 'react';
+import { createHighlighterCore, type HighlighterCore, type ThemedToken, type ThemeRegistration } from 'shiki/core';
+import { createJavaScriptRegexEngine } from 'shiki/engine/javascript';
+import { bundledLanguages, type BundledLanguage } from 'shiki/langs';
+import { detectShikiLang, parseDiffLines } from '../state/change-card-utils';
+import { useTheme } from './ThemeProvider';
+
+const PAPER_INK_THEME: ThemeRegistration = {
+  name: 'orchdeck-paper-ink',
+  type: 'light',
+  colors: {
+    'editor.background': '#FCFBF8',
+    'editor.foreground': '#1B1916',
+  },
+  tokenColors: [
+    { scope: ['comment', 'punctuation.definition.comment'], settings: { foreground: '#8C8478', fontStyle: 'italic' } },
+    { scope: ['keyword', 'storage', 'keyword.control'], settings: { foreground: '#A93B22' } },
+    { scope: ['string', 'constant.other.symbol'], settings: { foreground: '#266644' } },
+    { scope: ['constant.numeric', 'constant.language'], settings: { foreground: '#9E6319' } },
+    { scope: ['entity.name.type', 'support.type', 'entity.name.function'], settings: { foreground: '#55698F' } },
+    { scope: ['variable', 'identifier', 'meta.object-literal.key'], settings: { foreground: '#1B1916' } },
+  ],
+};
+
+const GRAPHITE_VERMILION_THEME: ThemeRegistration = {
+  name: 'orchdeck-graphite-vermilion',
+  type: 'dark',
+  colors: {
+    'editor.background': '#1D1B18',
+    'editor.foreground': '#ECE8E0',
+  },
+  tokenColors: [
+    { scope: ['comment', 'punctuation.definition.comment'], settings: { foreground: '#6E685E', fontStyle: 'italic' } },
+    { scope: ['keyword', 'storage', 'keyword.control'], settings: { foreground: '#DF684B' } },
+    { scope: ['string', 'constant.other.symbol'], settings: { foreground: '#63B888' } },
+    { scope: ['constant.numeric', 'constant.language'], settings: { foreground: '#D99A46' } },
+    { scope: ['entity.name.type', 'support.type', 'entity.name.function'], settings: { foreground: '#8EA4CC' } },
+    { scope: ['variable', 'identifier', 'meta.object-literal.key'], settings: { foreground: '#ECE8E0' } },
+  ],
+};
+
+let highlighterPromise: Promise<HighlighterCore> | null = null;
+const loadedLanguages = new Set<string>();
+
+async function getDiffHighlighter(lang: string): Promise<HighlighterCore> {
+  if (!highlighterPromise) {
+    highlighterPromise = createHighlighterCore({
+      themes: [PAPER_INK_THEME, GRAPHITE_VERMILION_THEME],
+      langs: [],
+      engine: createJavaScriptRegexEngine(),
+    });
+  }
+
+  const highlighter = await highlighterPromise;
+  if (lang !== 'text' && !loadedLanguages.has(lang) && lang in bundledLanguages) {
+    const loader = bundledLanguages[lang as BundledLanguage];
+    await highlighter.loadLanguage(loader);
+    loadedLanguages.add(lang);
+  }
+  return highlighter;
+}
+
+export interface ShikiDiffViewProps {
+  readonly filePath: string;
+  readonly diff: string;
+  readonly isBinary: boolean;
+}
+
+export function ShikiDiffView({ filePath, diff, isBinary }: ShikiDiffViewProps) {
+  const { theme } = useTheme();
+  const parsedLines = useMemo(() => parseDiffLines(diff), [diff]);
+  const [tokenLines, setTokenLines] = useState<readonly (readonly ThemedToken[])[] | null>(null);
+
+  const lang = useMemo(() => detectShikiLang(filePath), [filePath]);
+  const themeName = theme === 'dark' ? 'orchdeck-graphite-vermilion' : 'orchdeck-paper-ink';
+
+  const codeEntries = useMemo(
+    () =>
+      parsedLines
+        .map((line, index) => ({ index, line }))
+        .filter(
+          (entry) =>
+            entry.line.kind === 'add' || entry.line.kind === 'del' || entry.line.kind === 'context',
+        ),
+    [parsedLines],
+  );
+
+  useEffect(() => {
+    if (isBinary || codeEntries.length === 0 || lang === 'text' || !(lang in bundledLanguages)) {
+      setTokenLines(null);
+      return;
+    }
+
+    let cancelled = false;
+    const joinedCode = codeEntries.map((entry) => entry.line.code).join('\n');
+
+    void getDiffHighlighter(lang)
+      .then((highlighter) => {
+        if (cancelled) {
+          return;
+        }
+        const tokenized = highlighter.codeToTokens(joinedCode, {
+          lang,
+          theme: themeName,
+        });
+        setTokenLines(tokenized.tokens);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setTokenLines(null);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [codeEntries, isBinary, lang, themeName]);
+
+  if (isBinary) {
+    return (
+      <div className="tabular-mono border-t border-border-subtle bg-inset px-3 py-2 text-[11.5px] text-ink-tertiary">
+        Binary file diff omitted.
+      </div>
+    );
+  }
+
+  if (parsedLines.length === 0) {
+    return (
+      <div className="tabular-mono border-t border-border-subtle bg-inset px-3 py-2 text-[11.5px] text-ink-tertiary">
+        No textual diff available.
+      </div>
+    );
+  }
+
+  const lineTokenMap = new Map<number, readonly ThemedToken[]>();
+  if (tokenLines) {
+    codeEntries.forEach((entry, codeIdx) => {
+      const tokens = tokenLines[codeIdx];
+      if (tokens) {
+        lineTokenMap.set(entry.index, tokens);
+      }
+    });
+  }
+
+  return (
+    <div className="overflow-x-auto border-t border-border-subtle bg-surface">
+      <table className="tabular-mono w-full border-collapse text-[11.5px] leading-[1.45]">
+        <tbody>
+          {parsedLines.map((line, index) => {
+            if (line.kind === 'meta' || line.kind === 'hunk') {
+              return (
+                <tr key={index} className="bg-inset text-ink-tertiary">
+                  <td className="w-[40px] select-none px-2 py-0.5 text-right opacity-70" />
+                  <td className="w-[40px] select-none px-2 py-0.5 text-right opacity-70" />
+                  <td className="w-[18px] select-none px-1 py-0.5 text-center" />
+                  <td className="whitespace-pre px-2 py-0.5">{line.code}</td>
+                </tr>
+              );
+            }
+
+            const rowClasses =
+              line.kind === 'add'
+                ? 'bg-pass-bg text-ink'
+                : line.kind === 'del'
+                  ? 'bg-fail-bg text-ink'
+                  : 'text-ink-secondary';
+
+            const prefixClass =
+              line.kind === 'add'
+                ? 'text-pass font-medium'
+                : line.kind === 'del'
+                  ? 'text-fail font-medium'
+                  : 'text-ink-tertiary';
+
+            const tokens = lineTokenMap.get(index);
+
+            return (
+              <tr key={index} className={rowClasses}>
+                <td className="w-[40px] select-none border-r border-border-subtle px-2 py-0 text-right text-ink-tertiary">
+                  {line.oldLine ?? ''}
+                </td>
+                <td className="w-[40px] select-none border-r border-border-subtle px-2 py-0 text-right text-ink-tertiary">
+                  {line.newLine ?? ''}
+                </td>
+                <td className={`w-[18px] select-none px-1 py-0 text-center ${prefixClass}`}>
+                  {line.prefix}
+                </td>
+                <td className="whitespace-pre px-2 py-0">
+                  {tokens ? (
+                    tokens.map((token, tokenIdx) => (
+                      <span
+                        key={tokenIdx}
+                        style={token.color ? { color: token.color } : undefined}
+                      >
+                        {token.content}
+                      </span>
+                    ))
+                  ) : (
+                    <span>{line.code}</span>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
