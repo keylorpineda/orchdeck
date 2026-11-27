@@ -1,4 +1,39 @@
 export { AdapterRegistry } from './adapters/adapter-registry.js';
+export {
+  AGY_MODELS,
+  AntigravityAdapter,
+  DEFAULT_AGY_CAPABILITIES,
+  buildAgyArgs,
+  detectAgyCapabilitiesFromHelp,
+  parseAgyOutputLine,
+  type AntigravityAdapterOptions,
+} from './adapters/antigravity-adapter.js';
+export {
+  CLAUDE_CAPABILITIES,
+  CLAUDE_MODELS,
+  ClaudeAdapter,
+  buildClaudeArgs,
+  parseClaudeStreamLine,
+  type ClaudeAdapterOptions,
+} from './adapters/claude-adapter.js';
+export {
+  DefaultCliProcessLauncher,
+  detectRateLimitMessage,
+  isMinimumMajorVersion,
+  parseSemverVersion,
+  type CliProcessLauncher,
+  type CliSpawnOptions,
+  type RateLimitDetection,
+  type VersionProbeResult,
+} from './adapters/cli-base.js';
+export {
+  CODEX_CAPABILITIES,
+  CODEX_MODELS,
+  CodexAdapter,
+  buildCodexArgs,
+  parseCodexJsonlLine,
+  type CodexAdapterOptions,
+} from './adapters/codex-adapter.js';
 export { MockAdapter, createDefaultMockAdapters, type MockAdapterOptions } from './adapters/mock-adapter.js';
 export { TurnRunner, type TurnEventSink } from './adapters/turn-runner.js';
 export { startDaemon, type RunningDaemon, type StartDaemonOptions } from './daemon.js';
