@@ -4,8 +4,10 @@ export { TurnRunner, type TurnEventSink } from './adapters/turn-runner.js';
 export { startDaemon, type RunningDaemon, type StartDaemonOptions } from './daemon.js';
 export {
   DaemonDatabase,
+  type AppendMessageInput,
   type CreateProjectInput,
   type RecordUsageEventInput,
+  type UpdateProjectInput,
   type UsageEventRecord,
 } from './db/database.js';
 export { INITIAL_MIGRATIONS, type Migration } from './db/migrations.js';

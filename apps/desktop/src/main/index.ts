@@ -1,7 +1,13 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { AgentRole, ApprovalMode } from '@orchdeck/shared';
-import { app, BrowserWindow, ipcMain, session, shell } from 'electron';
+import {
+  isProviderId,
+  type AgentRole,
+  type ApprovalMode,
+  type MessageRole,
+  type ProviderId,
+} from '@orchdeck/shared';
+import { app, BrowserWindow, dialog, ipcMain, session, shell } from 'electron';
 import { DaemonSupervisor } from './daemon-supervisor.js';
 import {
   PRODUCTION_CSP,
@@ -32,6 +38,21 @@ function isOptionalApprovalMode(value: unknown): value is ApprovalMode | undefin
   );
 }
 
+function isMessageRole(value: unknown): value is MessageRole {
+  return value === 'user' || value === 'assistant' || value === 'system';
+}
+
+function isOptionalProviderOrNull(value: unknown): value is ProviderId | null | undefined {
+  return value === undefined || value === null || (typeof value === 'string' && isProviderId(value));
+}
+
+function asObject(value: unknown, handlerName: string): Record<string, unknown> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new Error(`Invalid params object for ${handlerName}.`);
+  }
+  return value as Record<string, unknown>;
+}
+
 function registerIpcHandlers(): void {
   ipcMain.handle('orchdeck:health', async () => {
     return supervisor.getClient().call('daemon.health', {});
@@ -51,8 +72,152 @@ function registerIpcHandlers(): void {
     return supervisor.getClient().call('kv.set', { key, value });
   });
 
+  ipcMain.handle('orchdeck:dialog-pick-directory', async () => {
+    const result = mainWindow
+      ? await dialog.showOpenDialog(mainWindow, { properties: ['openDirectory'] })
+      : await dialog.showOpenDialog({ properties: ['openDirectory'] });
+    if (result.canceled || result.filePaths.length === 0) {
+      return { canceled: true, directoryPath: null };
+    }
+    return { canceled: false, directoryPath: result.filePaths[0] ?? null };
+  });
+
   ipcMain.handle('orchdeck:projects-list', async () => {
     return supervisor.getClient().call('projects.list', {});
+  });
+
+  ipcMain.handle('orchdeck:projects-create', async (_event, rawParams: unknown) => {
+    const params = asObject(rawParams, 'orchdeck:projects-create');
+    const rootPath = params['rootPath'];
+    const name = params['name'];
+    const defaultBranch = params['defaultBranch'];
+    const testCommand = params['testCommand'];
+    if (
+      typeof rootPath !== 'string' ||
+      rootPath.trim().length === 0 ||
+      (name !== undefined && typeof name !== 'string') ||
+      (defaultBranch !== undefined && typeof defaultBranch !== 'string') ||
+      (testCommand !== undefined && testCommand !== null && typeof testCommand !== 'string')
+    ) {
+      throw new Error('Invalid params for orchdeck:projects-create.');
+    }
+    return supervisor.getClient().call('projects.create', {
+      rootPath,
+      name,
+      defaultBranch,
+      testCommand,
+    });
+  });
+
+  ipcMain.handle('orchdeck:projects-update', async (_event, rawParams: unknown) => {
+    const params = asObject(rawParams, 'orchdeck:projects-update');
+    const id = params['id'];
+    const name = params['name'];
+    const testCommand = params['testCommand'];
+    if (
+      typeof id !== 'string' ||
+      id.length === 0 ||
+      (name !== undefined && typeof name !== 'string') ||
+      (testCommand !== undefined && testCommand !== null && typeof testCommand !== 'string')
+    ) {
+      throw new Error('Invalid params for orchdeck:projects-update.');
+    }
+    return supervisor.getClient().call('projects.update', { id, name, testCommand });
+  });
+
+  ipcMain.handle('orchdeck:projects-delete', async (_event, id: unknown) => {
+    if (typeof id !== 'string' || id.length === 0) {
+      throw new Error('Invalid project id for orchdeck:projects-delete.');
+    }
+    return supervisor.getClient().call('projects.delete', { id });
+  });
+
+  ipcMain.handle('orchdeck:chats-list', async (_event, rawParams: unknown) => {
+    const params = asObject(rawParams, 'orchdeck:chats-list');
+    const projectId = params['projectId'];
+    const includeArchived = params['includeArchived'];
+    if (
+      typeof projectId !== 'string' ||
+      projectId.length === 0 ||
+      (includeArchived !== undefined && typeof includeArchived !== 'boolean')
+    ) {
+      throw new Error('Invalid params for orchdeck:chats-list.');
+    }
+    return supervisor.getClient().call('chats.list', { projectId, includeArchived });
+  });
+
+  ipcMain.handle('orchdeck:chats-create', async (_event, rawParams: unknown) => {
+    const params = asObject(rawParams, 'orchdeck:chats-create');
+    const projectId = params['projectId'];
+    const title = params['title'];
+    if (
+      typeof projectId !== 'string' ||
+      projectId.length === 0 ||
+      (title !== undefined && typeof title !== 'string')
+    ) {
+      throw new Error('Invalid params for orchdeck:chats-create.');
+    }
+    return supervisor.getClient().call('chats.create', { projectId, title });
+  });
+
+  ipcMain.handle('orchdeck:chats-rename', async (_event, rawParams: unknown) => {
+    const params = asObject(rawParams, 'orchdeck:chats-rename');
+    const id = params['id'];
+    const title = params['title'];
+    if (typeof id !== 'string' || id.length === 0 || typeof title !== 'string' || title.trim().length === 0) {
+      throw new Error('Invalid params for orchdeck:chats-rename.');
+    }
+    return supervisor.getClient().call('chats.rename', { id, title });
+  });
+
+  ipcMain.handle('orchdeck:chats-archive', async (_event, rawParams: unknown) => {
+    const params = asObject(rawParams, 'orchdeck:chats-archive');
+    const id = params['id'];
+    const archived = params['archived'];
+    if (typeof id !== 'string' || id.length === 0 || typeof archived !== 'boolean') {
+      throw new Error('Invalid params for orchdeck:chats-archive.');
+    }
+    return supervisor.getClient().call('chats.archive', { id, archived });
+  });
+
+  ipcMain.handle('orchdeck:chats-delete', async (_event, id: unknown) => {
+    if (typeof id !== 'string' || id.length === 0) {
+      throw new Error('Invalid chat id for orchdeck:chats-delete.');
+    }
+    return supervisor.getClient().call('chats.delete', { id });
+  });
+
+  ipcMain.handle('orchdeck:messages-list', async (_event, chatId: unknown) => {
+    if (typeof chatId !== 'string' || chatId.length === 0) {
+      throw new Error('Invalid chatId for orchdeck:messages-list.');
+    }
+    return supervisor.getClient().call('messages.list', { chatId });
+  });
+
+  ipcMain.handle('orchdeck:messages-append', async (_event, rawParams: unknown) => {
+    const params = asObject(rawParams, 'orchdeck:messages-append');
+    const chatId = params['chatId'];
+    const role = params['role'];
+    const providerId = params['providerId'];
+    const modelId = params['modelId'];
+    const content = params['content'];
+    if (
+      typeof chatId !== 'string' ||
+      chatId.length === 0 ||
+      !isMessageRole(role) ||
+      !isOptionalProviderOrNull(providerId) ||
+      (modelId !== undefined && modelId !== null && typeof modelId !== 'string') ||
+      typeof content !== 'string'
+    ) {
+      throw new Error('Invalid params for orchdeck:messages-append.');
+    }
+    return supervisor.getClient().call('messages.append', {
+      chatId,
+      role,
+      providerId,
+      modelId,
+      content,
+    });
   });
 
   ipcMain.handle('orchdeck:adapters-list', async () => {
@@ -60,10 +225,7 @@ function registerIpcHandlers(): void {
   });
 
   ipcMain.handle('orchdeck:turn-start', async (_event, rawParams: unknown) => {
-    if (typeof rawParams !== 'object' || rawParams === null) {
-      throw new Error('Invalid params object for orchdeck:turn-start.');
-    }
-    const params = rawParams as Record<string, unknown>;
+    const params = asObject(rawParams, 'orchdeck:turn-start');
     const projectId = params['projectId'];
     const chatId = params['chatId'];
     const cwd = params['cwd'];
