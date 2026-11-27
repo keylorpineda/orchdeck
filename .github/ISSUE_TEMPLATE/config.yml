@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security Vulnerability Report (Private Advisory)
+    url: https://github.com/keylorpineda/orchdeck/security/advisories/new
+    about: Report protected-branch bypasses, credential leaks, or unauthorized command execution privately.
+  - name: Architecture and Roadmap Documentation
+    url: https://github.com/keylorpineda/orchdeck/tree/dev/docs
+    about: Review Council Decisions, Technical Architecture, Design System, and Roadmap before proposing scope changes.
+  - name: Contributing and Governance Guidelines
+    url: https://github.com/keylorpineda/orchdeck/blob/dev/CONTRIBUTING.md
+    about: Read branch rules, pnpm requirements, Conventional Commit standards, and testing rules.

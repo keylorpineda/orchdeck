@@ -32,7 +32,7 @@ After discarding initial candidates with existing GitHub/agent-tool collisions o
 
 ### B. Visual Identity (Anti-AI-Slop)
 - **Decision:** **«Precision Editorial Workbench»** (*Paper & Ink* light theme + *Graphite & Vermilion* dark theme), established from `v0.1`.
-- **Banned tropes:** neon purple/blue gradients, gratuitous glassmorphism, cliché AI emojis (`✨`, `🚀`, `🧠`), unstyled `shadcn/ui` defaults, and default `Lucide` chrome.
+- **Banned tropes:** neon purple/blue gradients, gratuitous glassmorphism, cliché AI emojis (sparkles, rocket, brain), unstyled `shadcn/ui` defaults, and default `Lucide` chrome.
 - **UI stack:** React 19 + TypeScript + Vite + Tailwind CSS v4 + Base UI / Radix Primitives + Shiki (custom themes) + Phosphor Icons + `cmdk`.
 
 ### C. Approval Modes

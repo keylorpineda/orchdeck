@@ -1,0 +1,23 @@
+# <type>(<scope>): <imperative lowercase summary, min 12 chars, max 100 header>
+#
+# Why:
+# Explain the problem, motivation, or architectural reason for this change.
+#
+# What changed:
+# - Summarize the concrete files, modules, or behaviors introduced or updated.
+# - Include edge cases, invariants, or migration notes if applicable.
+#
+# Verification:
+# - List commands or tests executed (using pnpm) and observed results.
+#
+# Refs: #123
+#
+# Rules:
+# - Write everything in English.
+# - Body is mandatory (minimum 30 characters) and lines must not exceed 100 chars.
+# - Zero emojis (no Unicode symbols and no colon-delimited emoji shortcodes).
+# - Zero Co-Authored-By trailers or AI attribution footers.
+# - Allowed types: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert
+# - Allowed scopes: repo, ci, deps, docs, desktop, daemon, shared, ui, design, git,
+#   security, approvals, fusion, plugins, mcp, usage, memory, worktrees, adapters,
+#   adapter-claude, adapter-codex, adapter-antigravity, spike, release

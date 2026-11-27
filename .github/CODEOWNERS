@@ -1,0 +1,9 @@
+# Default repository owner
+* @keylorpineda
+
+# Governance, security, and architectural documentation
+/.github/ @keylorpineda
+/SECURITY.md @keylorpineda
+/CONTRIBUTING.md @keylorpineda
+/docs/ @keylorpineda
+/scripts/ @keylorpineda

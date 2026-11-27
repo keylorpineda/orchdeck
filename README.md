@@ -46,5 +46,6 @@ Using **Claude Code**, **Codex CLI**, and **Antigravity** today means juggling t
 - [Architecture](docs/ARCHITECTURE.md) — Electron + Decoupled Core Daemon, `ProviderAdapter` contract, approval state machine, model fusion, plugins, and telemetry.
 - [Design System](docs/DESIGN_SYSTEM.md) — *Precision Editorial Workbench* identity, anti-AI-slop rules, light/dark tokens, typography, and component specs.
 - [Roadmap](docs/ROADMAP.md) — Phased milestones from `Phase 0` to `v1.0` and explicit *Non-Goals*.
-- [Security](SECURITY.md) — API key stripping, branch protection invariants, and no-scraping policy.
-- [Contributing](CONTRIBUTING.md) — `feat/* → dev → main` workflow, Conventional Commits, and `MockAdapter` CI rules.
+- [Security](SECURITY.md) — Threat model, API key stripping, branch protection invariants, and vulnerability reporting.
+- [Security Architecture](docs/SECURITY_ARCHITECTURE.md) — Data classification, `SecretRedactor`, Electron sandboxing, IPC auth, and supply-chain controls.
+- [Contributing](CONTRIBUTING.md) — `pnpm`-only setup, `dev` integration workflow, Conventional Commits, and governance checks.

@@ -1,8 +1,12 @@
 name: External CLI / Adapter Breakage
 description: Report when an upstream Claude Code, Codex, or Antigravity CLI release breaks an adapter.
-title: "[Adapter Breakage]: "
-labels: ["bug"]
+title: "[Adapter]: "
+labels: ["bug", "needs-triage"]
 body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form when an official upstream CLI update changes flags, streaming JSON/JSONL schema, rate-limit output, or exit behavior.
   - type: dropdown
     id: provider
     attributes:
@@ -17,21 +21,57 @@ body:
     id: cli_version
     attributes:
       label: Installed CLI Version
-      description: Run `<cli> --version` and paste the output.
+      description: Run `<cli> --version` and paste the exact output.
       placeholder: "e.g. 1.0.45"
     validations:
       required: true
   - type: input
+    id: last_working_version
+    attributes:
+      label: Last Known Working CLI Version
+      description: If known, provide the previous version where the adapter worked properly.
+      placeholder: "e.g. 1.0.42"
+  - type: input
     id: os
     attributes:
-      label: Operating System
-      placeholder: "Windows 11 / macOS"
+      label: Operating System and Version
+      placeholder: "Windows 11 24H2 / macOS 15.x"
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Invocation Context
+      description: Specify the approval mode, canonical model handle, and operation (healthCheck, listModels, sendTurn, cancel).
+      placeholder: |
+        - Approval mode: Architect
+        - Model handle: claude:opus-4-6
+        - Operation: sendTurn (read_only Planner role)
     validations:
       required: true
   - type: textarea
     id: output
     attributes:
-      label: Observed Error or Format Change (redact tokens or sensitive paths)
+      label: Observed Error or Stream Format Change
+      description: Include redacted CLI stdout/stderr or JSONL snippet demonstrating the breakage.
       render: shell
     validations:
       required: true
+  - type: textarea
+    id: expected_normalized
+    attributes:
+      label: Expected NormalizedEvent Behavior
+      description: Explain what NormalizedEvent or capability flag should be emitted instead.
+    validations:
+      required: true
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Verification Checklist
+      options:
+        - label: Confirmed the CLI was invoked with subscription auth (API keys stripped, zero billing keys).
+          required: true
+        - label: All tokens, account identifiers, and private paths have been redacted.
+          required: true
+        - label: This report is written in English with zero emojis.
+          required: true

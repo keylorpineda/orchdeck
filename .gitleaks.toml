@@ -1,0 +1,51 @@
+title = "Orchdeck Secret Detection Configuration"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "orchdeck-anthropic-api-key"
+description = "Anthropic API key"
+regex = '''sk-ant-[A-Za-z0-9_-]{20,}'''
+tags = ["api-key", "anthropic"]
+
+[[rules]]
+id = "orchdeck-openai-project-key"
+description = "OpenAI API key"
+regex = '''(?:sk-proj-[A-Za-z0-9_-]{20,}|sk-[A-Za-z0-9]{20,}T3BlbkFJ[A-Za-z0-9]{20,})'''
+tags = ["api-key", "openai"]
+
+[[rules]]
+id = "orchdeck-google-api-key"
+description = "Google or Gemini API key"
+regex = '''AIza[0-9A-Za-z\-_]{35}'''
+tags = ["api-key", "google"]
+
+[[rules]]
+id = "orchdeck-github-token"
+description = "GitHub personal access or app token"
+regex = '''(?:gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,})'''
+tags = ["token", "github"]
+
+[[rules]]
+id = "orchdeck-private-key-header"
+description = "Private cryptographic key material"
+regex = '''-----BEGIN (?:RSA |EC |OPENSSH |DSA |PGP )?PRIVATE KEY-----'''
+tags = ["private-key"]
+
+[[rules]]
+id = "orchdeck-credentialed-db-url"
+description = "Database or cache connection string with embedded credentials"
+regex = '''(?:postgres|postgresql|mysql|mongodb(?:\+srv)?|redis):\/\/[^:\s]+:[^@\s]+@'''
+tags = ["database", "credentials"]
+
+[allowlist]
+description = "Allow safe example templates and explicitly annotated synthetic test fixtures"
+paths = [
+  '''^\.env\.example$''',
+  '''^\.gitleaks\.toml$''',
+  '''^scripts/check-secrets\.mjs$''',
+]
+regexes = [
+  '''orchdeck-secret-ignore''',
+]

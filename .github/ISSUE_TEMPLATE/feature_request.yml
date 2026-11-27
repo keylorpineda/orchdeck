@@ -1,20 +1,25 @@
 name: Feature Request
-description: Propose an improvement aligned with Orchdeck's workbench model (without turning it into an IDE).
+description: Propose a capability aligned with Orchdeck's conversation-first workbench architecture.
 title: "[Feat]: "
-labels: ["enhancement"]
+labels: ["enhancement", "needs-triage"]
 body:
+  - type: markdown
+    attributes:
+      value: |
+        Orchdeck is a conversation-first command deck, not a full IDE or node-graph builder.
+        Review docs/ARCHITECTURE.md, docs/DESIGN_SYSTEM.md, and docs/ROADMAP.md (including Non-Goals) before submitting.
   - type: textarea
     id: problem
     attributes:
       label: Problem Statement
-      description: Describe the daily workflow friction this solves.
+      description: What recurring workflow friction or architectural gap does this solve?
     validations:
       required: true
   - type: textarea
     id: proposal
     attributes:
-      label: Proposed Behavior
-      description: How should it work while keeping UI calm and human Git control intact?
+      label: Proposed Behavior and Design
+      description: Describe the user-facing workflow, Core Daemon behavior, and how it preserves calm UI and human Git control.
     validations:
       required: true
   - type: dropdown
@@ -22,11 +27,45 @@ body:
     attributes:
       label: Primary Area
       options:
-        - UI / Change Cards
-        - Model Fusion / Recipes
-        - Approval Modes / Security
-        - Plugins / Skills / MCP
+        - UI / Change Cards / Design System
+        - Model Fusion / Recipes / Handoff
+        - Approval Modes / Security Guardrails
+        - Plugins / Skills / Local MCP Hub
         - Usage & Quota Radar
         - Git Worktrees / Project Memory
+        - Core Daemon / ProviderAdapter Contract
     validations:
       required: true
+  - type: textarea
+    id: architecture_impact
+    attributes:
+      label: Architecture and Security Impact
+      description: Explain effects on ProviderAdapter, SQLite schema, approval modes, API key stripping, or protected-branch invariants.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: Describe alternative designs or reasons why simpler approaches are insufficient.
+  - type: textarea
+    id: acceptance_criteria
+    attributes:
+      label: Acceptance Criteria
+      description: Measurable conditions that verify the feature works and can be tested with MockAdapter in CI.
+      placeholder: |
+        - Criterion 1...
+        - Criterion 2...
+    validations:
+      required: true
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Alignment Checklist
+      options:
+        - label: This proposal does not violate Orchdeck's Non-Goals in docs/ROADMAP.md.
+          required: true
+        - label: This proposal preserves hard main branch protection and zero API token billing.
+          required: true
+        - label: This proposal is written in English with zero emojis.
+          required: true
