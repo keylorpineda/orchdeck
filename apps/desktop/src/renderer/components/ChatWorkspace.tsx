@@ -1,5 +1,5 @@
-import { GitBranch, PaperPlaneRight, Scales, Stop, Trash } from '@phosphor-icons/react';
-import { Suspense, lazy, useRef, useState, type FormEvent } from 'react';
+import { Cpu, Database, FolderOpen, GitBranch, PaperPlaneRight, Scales, ShieldCheck, Stop, Trash } from '@phosphor-icons/react';
+import { Suspense, lazy, useEffect, useRef, useState, type FormEvent } from 'react';
 import {
   TASK_TAGS,
   parseInlineMention,
@@ -30,10 +30,11 @@ import { EngineMark } from './EngineMark';
 import { HandoffRelayBanner } from './HandoffRelayBanner';
 import { useLanguage } from './LanguageProvider';
 import { ModelPicker } from './ModelPicker';
+import { OrsoMascot } from './OrsoMascot';
+import { OrsoStatusStrip } from './OrsoStatusStrip';
 import { PlanApprovalCard } from './PlanApprovalCard';
 import { RecipePicker } from './RecipePicker';
 import { ToolActivityBlock } from './ToolActivityBlock';
-import { ZompoStatusStrip } from './ZompoStatusStrip';
 
 const ChangeCard = lazy(() =>
   import('./ChangeCard').then((m) => ({ default: m.ChangeCard })),
@@ -109,6 +110,7 @@ export interface ChatWorkspaceProps {
   readonly onIntegrateBranch: () => Promise<void>;
   readonly onCreateWorktree?: ((chatId: string) => Promise<void>) | undefined;
   readonly onRemoveWorktree?: ((chatId: string) => Promise<void>) | undefined;
+  readonly onPickAndLinkProject?: (() => Promise<void>) | undefined;
 }
 
 export function ChatWorkspace({
@@ -165,53 +167,149 @@ export function ChatWorkspace({
   onIntegrateBranch,
   onCreateWorktree,
   onRemoveWorktree,
+  onPickAndLinkProject,
 }: ChatWorkspaceProps) {
-  const { dict } = useLanguage();
+  const { locale, dict } = useLanguage();
   const [prompt, setPrompt] = useState('');
   const [sending, setSending] = useState(false);
+  const [isUserTyping, setIsUserTyping] = useState(false);
+  const [welcomeGreet, setWelcomeGreet] = useState(false);
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
+  const threadEndRef = useRef<HTMLDivElement | null>(null);
+  const typingTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (typingTimerRef.current !== null) {
+        window.clearTimeout(typingTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!welcomeGreet) {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      setWelcomeGreet(false);
+    }, 2000);
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [welcomeGreet]);
+
+  useEffect(() => {
+    if (messages.length === 0 && !streaming) {
+      return;
+    }
+    threadEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }, [messages.length, streaming?.text]);
 
   const effectiveHandle = turnOverrideHandle ?? chatModelHandle;
   const parsedMention = parseInlineMention(prompt);
-  const zompoMood =
+  const orsoMood =
     streaming || activeRecipeRun?.status === 'RUNNING'
       ? 'working'
       : activeTaskRun?.state === 'AWAITING_PLAN_APPROVAL'
         ? 'waiting'
         : changeNotice && changeNotice.startsWith('Committed')
           ? 'committed'
-          : 'idle';
+          : isUserTyping
+            ? 'typing'
+            : 'idle';
 
   if (!project) {
     return (
-      <section className="surface-card p-6">
-        <p className="tabular-mono m-0 text-[11.5px] uppercase tracking-[0.06em] text-ink-tertiary">
-          Workbench Ready
-        </p>
-        <h1 className="mt-1 mb-2 font-[var(--font-editorial)] text-[24px] font-medium tracking-[-0.015em] text-ink">
-          Link a local Git repository
-        </h1>
-        <p className="m-0 text-ink-secondary">
-          Select a repository folder from the sidebar to inspect live branch status and keep
-          persistent conversation threads backed by SQLite WAL.
-        </p>
+      <section className="orch-enter flex flex-col gap-5">
+        <div className="surface-elevated flex flex-col items-center rounded-[12px] px-7 py-8 text-center">
+          <div className="relative flex flex-col items-center">
+            {welcomeGreet ? (
+              <span className="orch-popover mb-2 rounded-[6px] border border-[var(--accent)]/40 bg-[var(--accent-soft)] px-2.5 py-1 font-mono text-[11px] font-medium text-[var(--accent)]">
+                {dict.orsoWaving}
+              </span>
+            ) : null}
+            <OrsoMascot
+              mood="idle"
+              size={148}
+              interactive
+              label="Orso mascot welcoming you"
+              onInteract={() => setWelcomeGreet(true)}
+            />
+          </div>
+
+          <p className="tabular-mono mt-3 mb-0 text-[11px] uppercase tracking-[0.14em] text-ink-tertiary">
+            Orchdeck · Workbench
+          </p>
+          <h1 className="mt-1.5 mb-2 font-[var(--font-editorial)] text-[25px] font-medium tracking-[-0.015em] text-ink">
+            {dict.welcomeTitle}
+          </h1>
+          <p className="m-0 max-w-[52ch] text-[13.5px] leading-[1.5] text-ink-secondary">
+            {dict.welcomeSubtitle}
+          </p>
+
+          {onPickAndLinkProject ? (
+            <button
+              type="button"
+              onClick={() => void onPickAndLinkProject()}
+              className="orch-btn mt-5 inline-flex items-center gap-2 rounded-[8px] border border-accent bg-accent px-4 py-2 text-[13px] font-medium text-surface hover:border-accent-hover hover:bg-accent-hover"
+            >
+              <FolderOpen size={16} weight="regular" />
+              {dict.welcomeLinkCta}
+            </button>
+          ) : null}
+        </div>
+
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="surface-card orch-enter rounded-[8px] p-4">
+            <div className="mb-2 flex items-center gap-2 text-accent">
+              <ShieldCheck size={16} weight="regular" />
+              <span className="text-[12.5px] font-semibold text-ink">{dict.welcomeCap1Title}</span>
+            </div>
+            <p className="m-0 text-[12px] leading-[1.45] text-ink-secondary">
+              {dict.welcomeCap1Desc}
+            </p>
+          </div>
+          <div className="surface-card orch-enter rounded-[8px] p-4">
+            <div className="mb-2 flex items-center gap-2 text-accent">
+              <Cpu size={16} weight="regular" />
+              <span className="text-[12.5px] font-semibold text-ink">{dict.welcomeCap2Title}</span>
+            </div>
+            <p className="m-0 text-[12px] leading-[1.45] text-ink-secondary">
+              {dict.welcomeCap2Desc}
+            </p>
+          </div>
+          <div className="surface-card orch-enter rounded-[8px] p-4">
+            <div className="mb-2 flex items-center gap-2 text-accent">
+              <Database size={16} weight="regular" />
+              <span className="text-[12.5px] font-semibold text-ink">{dict.welcomeCap3Title}</span>
+            </div>
+            <p className="m-0 text-[12px] leading-[1.45] text-ink-secondary">
+              {dict.welcomeCap3Desc}
+            </p>
+          </div>
+        </div>
       </section>
     );
   }
 
   if (!chat) {
     return (
-      <section className="surface-card p-6">
-        <h1 className="m-0 font-[var(--font-editorial)] text-[24px] font-medium tracking-[-0.015em] text-ink">
-          {project.name}
-        </h1>
-        <p className="tabular-mono mt-1 mb-4 text-[11.5px] text-ink-secondary">
-          {project.rootPath} · {project.currentBranch ?? 'unavailable'}
-        </p>
+      <section className="surface-elevated orch-enter flex flex-col items-start rounded-[10px] p-6">
+        <div className="mb-3 flex items-center gap-3">
+          <OrsoMascot mood="idle" size={64} showDesk={false} interactive />
+          <div>
+            <h1 className="m-0 font-[var(--font-editorial)] text-[24px] font-medium tracking-[-0.015em] text-ink">
+              {project.name}
+            </h1>
+            <p className="tabular-mono mt-0.5 mb-0 text-[11.5px] text-ink-secondary">
+              {project.rootPath} · {project.currentBranch ?? 'unavailable'}
+            </p>
+          </div>
+        </div>
         <button
           type="button"
           onClick={() => void onCreateChat(project.id)}
-          className="orch-transition rounded-[6px] border border-accent bg-accent px-3.5 py-1.5 text-[12.5px] font-medium text-surface hover:border-accent-hover hover:bg-accent-hover"
+          className="orch-btn rounded-[6px] border border-accent bg-accent px-3.5 py-1.5 text-[12.5px] font-medium text-surface hover:border-accent-hover hover:bg-accent-hover"
         >
           {dict.startNewChat}
         </button>
@@ -288,9 +386,9 @@ export function ChatWorkspace({
         ) : null}
       </header>
 
-      <ZompoStatusStrip
-        mood={zompoMood}
-        detailLabel={`${project.name} · ${chat.worktreeBranch ?? project.currentBranch ?? 'repo'}`}
+      <OrsoStatusStrip
+        locale={locale}
+        mood={orsoMood}
       />
 
       <div className="pixel-rule" aria-hidden="true" />
@@ -314,8 +412,8 @@ export function ChatWorkspace({
               key={msg.id}
               className={
                 msg.role === 'user'
-                  ? 'surface-card max-w-[68ch] px-4 py-3'
-                  : 'border-l-2 border-border-strong py-0.5 pl-4'
+                  ? 'surface-card orch-enter max-w-[68ch] px-4 py-3'
+                  : 'orch-enter border-l-2 border-border-strong py-0.5 pl-4'
               }
             >
               <div className="mb-1.5 flex items-center gap-2 text-[11.5px] text-ink-tertiary">
@@ -452,9 +550,11 @@ export function ChatWorkspace({
         </Suspense>
       ) : null}
 
+      <div ref={threadEndRef} className="h-px" aria-hidden="true" />
+
       <form
         onSubmit={(e) => void handleSubmit(e)}
-        className={`surface-card p-3 ${
+        className={`surface-elevated rounded-[10px] p-3 ${
           approvalMode === 'branch_pilot'
             ? 'border-t-2 border-t-accent'
             : approvalMode === 'express'
@@ -465,7 +565,16 @@ export function ChatWorkspace({
         <textarea
           ref={composerRef}
           value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
+          onChange={(e) => {
+            setPrompt(e.target.value);
+            setIsUserTyping(e.target.value.trim().length > 0);
+            if (typingTimerRef.current !== null) {
+              window.clearTimeout(typingTimerRef.current);
+            }
+            typingTimerRef.current = window.setTimeout(() => {
+              setIsUserTyping(false);
+            }, 1100);
+          }}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
               e.preventDefault();

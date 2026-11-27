@@ -33,6 +33,7 @@ import {
 import { ChatWorkspace, type MessageTurnMeta } from './components/ChatWorkspace';
 import { LanguageProvider, useLanguage } from './components/LanguageProvider';
 import { ProjectSidebar } from './components/ProjectSidebar';
+import { SplashScreen } from './components/SplashScreen';
 import { ThemeProvider } from './components/ThemeProvider';
 import { UsageQuotaRadar } from './components/UsageQuotaRadar';
 import { WorkbenchShell } from './components/WorkbenchShell';
@@ -106,7 +107,9 @@ function WorkbenchApp() {
   const [recommendation, setRecommendation] = useState<ModelRecommendation | null>(null);
   const taskStartedAtRef = useRef<number | null>(null);
   const taskIterationsRef = useRef(0);
-  const { dict } = useLanguage();
+  const { locale, dict } = useLanguage();
+  const [workspaceReady, setWorkspaceReady] = useState(false);
+  const [showSplash, setShowSplash] = useState(true);
   const [changeError, setChangeError] = useState<string | null>(null);
   const [changeNotice, setChangeNotice] = useState<string | null>(null);
 
@@ -243,7 +246,9 @@ function WorkbenchApp() {
   }, [includeArchived]);
 
   useEffect(() => {
-    void loadInitialWorkspace();
+    void loadInitialWorkspace().finally(() => {
+      setWorkspaceReady(true);
+    });
   }, [loadInitialWorkspace]);
 
   useEffect(() => {
@@ -1067,7 +1072,15 @@ function WorkbenchApp() {
   const activeChat = activeChats.find((c) => c.id === selectedChatId) ?? null;
 
   return (
-    <WorkbenchShell
+    <>
+      {showSplash ? (
+        <SplashScreen
+          locale={locale}
+          ready={workspaceReady}
+          onFinished={() => setShowSplash(false)}
+        />
+      ) : null}
+      <WorkbenchShell
       projectName={activeProject?.name}
       branchName={activeChat?.worktreeBranch ?? activeProject?.currentBranch ?? undefined}
       drawerContent={
@@ -1255,8 +1268,15 @@ function WorkbenchApp() {
         onIntegrateBranch={handleIntegrateBranch}
         onCreateWorktree={handleCreateWorktree}
         onRemoveWorktree={handleRemoveWorktree}
+        onPickAndLinkProject={async () => {
+          const picked = await handlePickDirectory();
+          if (picked) {
+            await handleLinkRepository(picked, null);
+          }
+        }}
       />
     </WorkbenchShell>
+    </>
   );
 }
 
