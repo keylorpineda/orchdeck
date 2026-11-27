@@ -71,3 +71,262 @@
   transition-duration: 120ms;
   transition-timing-function: cubic-bezier(0.2, 0, 0, 1);
 }
+
+.pixel-crisp {
+  shape-rendering: crispEdges;
+  image-rendering: pixelated;
+}
+
+.pixel-rule {
+  height: 2px;
+  background-image: repeating-linear-gradient(
+    to right,
+    var(--border-strong) 0,
+    var(--border-strong) 4px,
+    transparent 4px,
+    transparent 8px
+  );
+}
+
+.pixel-frame {
+  box-shadow:
+    inset 2px 0 0 0 var(--border-strong),
+    inset -2px 0 0 0 var(--border-strong),
+    var(--surface-highlight);
+}
+
+/* Zompo natural anatomical SVG animations (tripod gait, antenna feel, eye blink, leaf sway) */
+@keyframes zompo-breathe {
+  0%,
+  100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(0.85px) rotate(-0.5deg);
+  }
+}
+
+@keyframes zompo-stride-body {
+  0%,
+  100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  25% {
+    transform: translateY(-1px) rotate(0.9deg);
+  }
+  50% {
+    transform: translateY(0.25px) rotate(0deg);
+  }
+  75% {
+    transform: translateY(-1px) rotate(-0.7deg);
+  }
+}
+
+@keyframes zompo-tripod-a {
+  0%,
+  100% {
+    transform: translate(0px, 0px) rotate(0deg);
+  }
+  25% {
+    transform: translate(1.8px, -1.9px) rotate(-5deg);
+  }
+  50% {
+    transform: translate(2.6px, 0px) rotate(-1.5deg);
+  }
+  75% {
+    transform: translate(0.9px, 0.35px) rotate(2.5deg);
+  }
+}
+
+@keyframes zompo-tripod-b {
+  0%,
+  100% {
+    transform: translate(2.4px, 0px) rotate(-1.5deg);
+  }
+  25% {
+    transform: translate(0.8px, 0.35px) rotate(2.5deg);
+  }
+  50% {
+    transform: translate(0px, 0px) rotate(0deg);
+  }
+  75% {
+    transform: translate(1.8px, -1.9px) rotate(-5deg);
+  }
+}
+
+@keyframes zompo-leaf-idle {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  50% {
+    transform: rotate(1.6deg);
+  }
+}
+
+@keyframes zompo-leaf-carry {
+  0%,
+  100% {
+    transform: rotate(-1.2deg) translateY(0px);
+  }
+  50% {
+    transform: rotate(2.8deg) translateY(-1.1px);
+  }
+}
+
+@keyframes zompo-leaf-wait {
+  0%,
+  100% {
+    transform: rotate(-2.5deg) translateY(-0.5px);
+  }
+  50% {
+    transform: rotate(1.2deg) translateY(0.4px);
+  }
+}
+
+@keyframes zompo-antenna-l {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  40% {
+    transform: rotate(-6deg);
+  }
+  75% {
+    transform: rotate(3.5deg);
+  }
+}
+
+@keyframes zompo-antenna-r {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  30% {
+    transform: rotate(5.5deg);
+  }
+  70% {
+    transform: rotate(-4deg);
+  }
+}
+
+@keyframes zompo-blink {
+  0%,
+  92%,
+  100% {
+    transform: scaleY(1);
+  }
+  96% {
+    transform: scaleY(0.12);
+  }
+}
+
+@keyframes zompo-shadow-stride {
+  0%,
+  100% {
+    transform: scaleX(1) translateX(0px);
+  }
+  50% {
+    transform: scaleX(0.95) translateX(0.6px);
+  }
+}
+
+.zompo-svg .zompo-body {
+  transform-box: fill-box;
+  transform-origin: center bottom;
+}
+
+.zompo-svg .zompo-leaf {
+  transform-box: fill-box;
+  transform-origin: 85% 88%;
+}
+
+.zompo-svg .zompo-antenna-l,
+.zompo-svg .zompo-antenna-r {
+  transform-box: fill-box;
+  transform-origin: 12% 92%;
+}
+
+.zompo-svg .zompo-leg-a,
+.zompo-svg .zompo-leg-b {
+  transform-box: fill-box;
+  transform-origin: 50% 10%;
+}
+
+.zompo-svg .zompo-eye-blink {
+  transform-box: fill-box;
+  transform-origin: center center;
+  animation: zompo-blink 4.6s ease-in-out infinite;
+}
+
+.zompo-svg .zompo-shadow {
+  transform-box: fill-box;
+  transform-origin: center center;
+}
+
+.zompo-svg[data-mood='idle'] .zompo-body {
+  animation: zompo-breathe 3.2s ease-in-out infinite;
+}
+
+.zompo-svg[data-mood='idle'] .zompo-leaf {
+  animation: zompo-leaf-idle 3.6s ease-in-out infinite;
+}
+
+.zompo-svg[data-mood='idle'] .zompo-antenna-l {
+  animation: zompo-antenna-l 3.4s ease-in-out infinite;
+}
+
+.zompo-svg[data-mood='idle'] .zompo-antenna-r {
+  animation: zompo-antenna-r 2.9s ease-in-out infinite;
+}
+
+.zompo-svg[data-mood='working'] .zompo-body {
+  animation: zompo-stride-body 0.64s ease-in-out infinite;
+}
+
+.zompo-svg[data-mood='working'] .zompo-leg-a {
+  animation: zompo-tripod-a 0.64s ease-in-out infinite;
+}
+
+.zompo-svg[data-mood='working'] .zompo-leg-b {
+  animation: zompo-tripod-b 0.64s ease-in-out infinite;
+}
+
+.zompo-svg[data-mood='working'] .zompo-leaf {
+  animation: zompo-leaf-carry 0.64s ease-in-out infinite;
+}
+
+.zompo-svg[data-mood='working'] .zompo-antenna-l {
+  animation: zompo-antenna-l 1.1s ease-in-out infinite;
+}
+
+.zompo-svg[data-mood='working'] .zompo-antenna-r {
+  animation: zompo-antenna-r 0.95s ease-in-out infinite;
+}
+
+.zompo-svg[data-mood='working'] .zompo-shadow {
+  animation: zompo-shadow-stride 0.64s ease-in-out infinite;
+}
+
+.zompo-svg[data-mood='waiting'] .zompo-leaf {
+  animation: zompo-leaf-wait 2.2s ease-in-out infinite;
+}
+
+.zompo-svg[data-mood='waiting'] .zompo-antenna-l {
+  animation: zompo-antenna-l 2s ease-in-out infinite;
+}
+
+.zompo-svg[data-mood='waiting'] .zompo-antenna-r {
+  animation: zompo-antenna-r 2s ease-in-out infinite;
+}
+
+.zompo-svg[data-mood='committed'] .zompo-body {
+  animation: zompo-breathe 2.8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .zompo-svg *,
+  .zompo-svg .zompo-eye-blink {
+    animation: none !important;
+  }
+}

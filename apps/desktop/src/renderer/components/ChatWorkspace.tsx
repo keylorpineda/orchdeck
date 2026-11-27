@@ -26,12 +26,14 @@ import { ChangeCard } from './ChangeCard';
 import { CoordinationLogCard } from './CoordinationLogCard';
 import { EngineMark } from './EngineMark';
 import { HandoffRelayBanner } from './HandoffRelayBanner';
+import { useLanguage } from './LanguageProvider';
 import { MarkdownContent } from './MarkdownContent';
 import { ModelPicker } from './ModelPicker';
 import { PlanApprovalCard } from './PlanApprovalCard';
 import { RecipePicker } from './RecipePicker';
 import { SecondOpinionCard } from './SecondOpinionCard';
 import { ToolActivityBlock } from './ToolActivityBlock';
+import { ZompoStatusStrip } from './ZompoStatusStrip';
 
 export interface MessageTurnMeta {
   readonly tools: readonly ToolActivityEntry[];
@@ -148,12 +150,21 @@ export function ChatWorkspace({
   onCreateWorktree,
   onRemoveWorktree,
 }: ChatWorkspaceProps) {
+  const { dict } = useLanguage();
   const [prompt, setPrompt] = useState('');
   const [sending, setSending] = useState(false);
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
 
   const effectiveHandle = turnOverrideHandle ?? chatModelHandle;
   const parsedMention = parseInlineMention(prompt);
+  const zompoMood =
+    streaming || activeRecipeRun?.status === 'RUNNING'
+      ? 'working'
+      : activeTaskRun?.state === 'AWAITING_PLAN_APPROVAL'
+        ? 'waiting'
+        : changeNotice && changeNotice.startsWith('Committed')
+          ? 'committed'
+          : 'idle';
 
   if (!project) {
     return (
@@ -186,7 +197,7 @@ export function ChatWorkspace({
           onClick={() => void onCreateChat(project.id)}
           className="orch-transition rounded-[6px] border border-accent bg-accent px-3.5 py-1.5 text-[12.5px] font-medium text-surface hover:border-accent-hover hover:bg-accent-hover"
         >
-          Start New Chat
+          {dict.startNewChat}
         </button>
       </section>
     );
@@ -243,7 +254,7 @@ export function ChatWorkspace({
                 title="Remove isolated worktree for this chat"
               >
                 <Trash size={12} weight="regular" />
-                Remove Worktree
+                {dict.removeWorktree}
               </button>
             ) : (
               <button
@@ -254,12 +265,19 @@ export function ChatWorkspace({
                 title="Isolate this chat in a dedicated git worktree"
               >
                 <GitBranch size={12} weight="regular" />
-                Isolate in Worktree
+                {dict.isolateWorktree}
               </button>
             )}
           </div>
         ) : null}
       </header>
+
+      <ZompoStatusStrip
+        mood={zompoMood}
+        detailLabel={`${project.name} · ${chat.worktreeBranch ?? project.currentBranch ?? 'repo'}`}
+      />
+
+      <div className="pixel-rule" aria-hidden="true" />
 
       <div className="flex flex-col gap-5">
         {messages.length === 0 && !streaming ? (
@@ -472,7 +490,7 @@ export function ChatWorkspace({
               className="orch-transition inline-flex items-center gap-1.5 rounded-[6px] border border-fail bg-fail-bg px-3 py-1 text-[12px] font-medium text-fail"
             >
               <Stop size={13} weight="regular" />
-              Stop
+              {dict.stop}
             </button>
           ) : (
             <div className="flex items-center gap-1.5">
@@ -495,7 +513,7 @@ export function ChatWorkspace({
                 className="orch-transition inline-flex items-center gap-1.5 rounded-[6px] border border-border-strong bg-surface px-2.5 py-1 text-[12px] text-ink hover:border-accent disabled:opacity-50"
               >
                 <Scales size={13} weight="regular" />
-                2nd Opinion
+                {dict.secondOpinion}
               </button>
               <button
                 type="submit"
@@ -503,7 +521,7 @@ export function ChatWorkspace({
                 className="orch-transition inline-flex items-center gap-1.5 rounded-[6px] border border-accent bg-accent px-3 py-1 text-[12px] font-medium text-surface hover:border-accent-hover hover:bg-accent-hover disabled:opacity-50"
               >
                 <PaperPlaneRight size={13} weight="regular" />
-                Send
+                {dict.send}
               </button>
             </div>
           )}

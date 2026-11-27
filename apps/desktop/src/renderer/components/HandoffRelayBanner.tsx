@@ -1,6 +1,7 @@
 import { ArrowsLeftRight } from '@phosphor-icons/react';
 import { useState } from 'react';
 import type { ModelOption } from '../state/turn-stream';
+import { useLanguage } from './LanguageProvider';
 
 export interface HandoffRelayBannerProps {
   readonly modelOptions: readonly ModelOption[];
@@ -19,6 +20,7 @@ export function HandoffRelayBanner({
   lastHandoffNotice,
   onRelay,
 }: HandoffRelayBannerProps) {
+  const { dict } = useLanguage();
   const alternativeOptions = modelOptions.filter((opt) => opt.handle !== currentModelHandle);
   const [targetHandle, setTargetHandle] = useState(
     alternativeOptions[0]?.handle ?? modelOptions[0]?.handle ?? currentModelHandle,
@@ -35,7 +37,7 @@ export function HandoffRelayBanner({
         <span className="font-medium text-ink">
           {rateLimitReason
             ? 'Quota cooldown detected — 1-click handoff ready'
-            : 'Hand off to another engine'}
+            : dict.handOffBannerTitle}
         </span>
         <span className="text-[11.5px] text-ink-secondary">
           {rateLimitReason ??
@@ -66,7 +68,7 @@ export function HandoffRelayBanner({
           className="orch-transition inline-flex items-center gap-1.5 rounded-[6px] border border-accent bg-accent px-2.5 py-1 text-[11.5px] font-medium text-surface hover:border-accent-hover hover:bg-accent-hover disabled:opacity-50"
         >
           <ArrowsLeftRight size={13} weight="regular" />
-          {busy ? 'Relaying...' : 'Hand Off'}
+          {busy ? 'Relaying...' : dict.handOffAction}
         </button>
       </div>
     </div>

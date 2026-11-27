@@ -9,7 +9,9 @@ import {
 } from '@phosphor-icons/react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { EngineMark } from './EngineMark';
+import { useLanguage } from './LanguageProvider';
 import { useTheme } from './ThemeProvider';
+import { ZompoMascot } from './ZompoMascot';
 
 export interface WorkbenchShellProps {
   readonly projectName?: string | undefined;
@@ -29,6 +31,7 @@ export function WorkbenchShell({
   children,
 }: WorkbenchShellProps) {
   const { theme, toggleTheme } = useTheme();
+  const { locale, setLocale, dict } = useLanguage();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
@@ -63,7 +66,10 @@ export function WorkbenchShell({
           >
             <SidebarSimple size={16} weight="regular" />
           </button>
-          <span className="font-semibold tracking-[-0.01em] text-ink">Orchdeck</span>
+          <span className="inline-flex items-center gap-2 font-semibold tracking-[-0.01em] text-ink">
+            <ZompoMascot mood="idle" size={28} />
+            <span>Orchdeck</span>
+          </span>
           {projectName ? (
             <div className="flex items-center gap-1.5 text-ink-secondary">
               <span className="text-ink-tertiary">/</span>
@@ -89,6 +95,31 @@ export function WorkbenchShell({
               <EngineMark provider="antigravity" muted />
             </div>
           )}
+
+          <div
+            role="group"
+            aria-label="Language switcher"
+            className="tabular-mono flex items-center rounded-[4px] border border-border-subtle bg-surface p-0.5 text-[10.5px]"
+          >
+            <button
+              type="button"
+              onClick={() => setLocale('en')}
+              className={`rounded-[3px] px-1.5 py-0.5 ${
+                locale === 'en' ? 'bg-accent-soft font-medium text-accent' : 'text-ink-tertiary hover:text-ink'
+              }`}
+            >
+              EN
+            </button>
+            <button
+              type="button"
+              onClick={() => setLocale('es')}
+              className={`rounded-[3px] px-1.5 py-0.5 ${
+                locale === 'es' ? 'bg-accent-soft font-medium text-accent' : 'text-ink-tertiary hover:text-ink'
+              }`}
+            >
+              ES
+            </button>
+          </div>
 
           <button
             type="button"
@@ -159,9 +190,10 @@ export function WorkbenchShell({
           >
             {drawerContent ?? (
               <div>
-                <h2 className="m-0 text-[13px] font-semibold text-ink">Inspector</h2>
+                <h2 className="m-0 text-[13px] font-semibold text-ink">{dict.inspectorTitle}</h2>
+                <div className="pixel-rule my-2.5" />
                 <p className="mt-2 text-ink-secondary">
-                  Plugin Switchboard and Local MCP Hub activate in v0.2-v0.3.
+                  Plugin Switchboard and Local MCP Hub activate in v0.3.
                 </p>
               </div>
             )}

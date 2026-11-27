@@ -1,6 +1,8 @@
 import { Check, X } from '@phosphor-icons/react';
 import type { TaskRunRecord } from '@orchdeck/shared';
+import { useLanguage } from './LanguageProvider';
 import { MarkdownContent } from './MarkdownContent';
+import { PixelGlyph } from './PixelGlyphs';
 
 export interface PlanApprovalCardProps {
   readonly taskRun: TaskRunRecord;
@@ -15,16 +17,18 @@ export function PlanApprovalCard({
   onApprovePlan,
   onRejectPlan,
 }: PlanApprovalCardProps) {
+  const { dict } = useLanguage();
   return (
     <section
-      className="surface-card overflow-hidden border-l-2 border-l-warn"
+      className="surface-card pixel-frame overflow-hidden border-l-2 border-l-warn"
       aria-label="Plan Approval Gate"
     >
       <div className="flex min-h-[38px] items-center justify-between gap-2 border-b border-border-subtle bg-inset px-3 py-1.5">
         <div className="flex items-center gap-2">
-          <span className="text-[12px] font-medium text-ink">Architect Plan Ready</span>
+          <PixelGlyph name="branch-trail" size={12} />
+          <span className="text-[12px] font-medium text-ink">{dict.planReadyTitle}</span>
           <span className="tabular-mono rounded-[4px] border border-border-subtle bg-warn-bg px-1.5 py-0.5 text-[11px] text-warn">
-            AWAITING APPROVAL
+            {dict.awaitingApproval}
           </span>
         </div>
         <span className="tabular-mono text-[11px] text-ink-tertiary">
@@ -45,7 +49,7 @@ export function PlanApprovalCard({
             className="orch-transition inline-flex items-center gap-1.5 rounded-[6px] border border-accent bg-accent px-3 py-1 text-[12px] font-medium text-surface hover:border-accent-hover hover:bg-accent-hover disabled:opacity-50"
           >
             <Check size={13} weight="regular" />
-            Approve & Execute
+            {dict.approveExecute}
           </button>
 
           <button
@@ -55,7 +59,7 @@ export function PlanApprovalCard({
             className="orch-transition inline-flex items-center gap-1.5 rounded-[6px] border border-border-strong bg-surface px-2.5 py-1 text-[12px] text-fail hover:border-fail disabled:opacity-50"
           >
             <X size={13} weight="regular" />
-            Reject
+            {dict.reject}
           </button>
         </div>
 
