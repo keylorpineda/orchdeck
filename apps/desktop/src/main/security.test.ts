@@ -1,4 +1,6 @@
+import fs from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { resolveDaemonCliPath } from './daemon-supervisor.js';
 import {
   PRODUCTION_CSP,
   createSecureWebPreferences,
@@ -57,5 +59,11 @@ describe('Electron security configuration', () => {
     expect(isAllowedExternalUrl('file:///etc/passwd')).toBe(false);
     expect(isAllowedExternalUrl('javascript:alert(1)')).toBe(false);
     expect(isAllowedExternalUrl('not-a-url')).toBe(false);
+  });
+
+  it('resolves the Core Daemon ESM cli entry without throwing export errors', () => {
+    const cliPath = resolveDaemonCliPath();
+    expect(cliPath.endsWith('cli.js')).toBe(true);
+    expect(fs.existsSync(cliPath)).toBe(true);
   });
 });
