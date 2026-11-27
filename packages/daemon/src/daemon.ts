@@ -7,6 +7,7 @@ import { TurnRunner } from './adapters/turn-runner.js';
 import { TaskRunOrchestrator } from './approvals/task-run-machine.js';
 import { DaemonDatabase } from './db/database.js';
 import { RecipeOrchestrator } from './fusion/recipe-orchestrator.js';
+import { SecondOpinionOrchestrator } from './fusion/second-opinion-orchestrator.js';
 import { GitService } from './git/git-service.js';
 import { DaemonRpcServer } from './ipc/server.js';
 import { resolveDefaultDataDir, resolveSocketPath } from './ipc/socket-path.js';
@@ -64,6 +65,14 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Run
     },
   });
 
+  const secondOpinionOrchestrator = new SecondOpinionOrchestrator({
+    turnRunner,
+    gitService,
+    emitUpdated: (secondOpinion) => {
+      server?.broadcastNotification('secondOpinion.updated', { secondOpinion });
+    },
+  });
+
   server = new DaemonRpcServer({
     db,
     socketPath,
@@ -72,6 +81,7 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Run
     turnRunner,
     taskRunOrchestrator,
     recipeOrchestrator,
+    secondOpinionOrchestrator,
     gitService,
   });
 
@@ -88,6 +98,7 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Run
     socketPath,
     authToken,
     close: async () => {
+      secondOpinionOrchestrator.dispose();
       recipeOrchestrator.dispose();
       taskRunOrchestrator.dispose();
       await server.stop();

@@ -30,6 +30,7 @@ import type { TurnRunner } from '../adapters/turn-runner.js';
 import type { TaskRunOrchestrator } from '../approvals/task-run-machine.js';
 import type { DaemonDatabase } from '../db/database.js';
 import type { RecipeOrchestrator } from '../fusion/recipe-orchestrator.js';
+import type { SecondOpinionOrchestrator } from '../fusion/second-opinion-orchestrator.js';
 import { GitService } from '../git/git-service.js';
 
 const MAX_LINE_BYTES = 1024 * 1024;
@@ -42,6 +43,7 @@ export interface DaemonRpcServerOptions {
   readonly turnRunner?: TurnRunner | undefined;
   readonly taskRunOrchestrator?: TaskRunOrchestrator | undefined;
   readonly recipeOrchestrator?: RecipeOrchestrator | undefined;
+  readonly secondOpinionOrchestrator?: SecondOpinionOrchestrator | undefined;
   readonly gitService?: GitService | undefined;
   readonly startedAtMs?: number | undefined;
 }
@@ -111,6 +113,7 @@ export class DaemonRpcServer {
   private readonly turnRunner: TurnRunner | undefined;
   private readonly taskRunOrchestrator: TaskRunOrchestrator | undefined;
   private readonly recipeOrchestrator: RecipeOrchestrator | undefined;
+  private readonly secondOpinionOrchestrator: SecondOpinionOrchestrator | undefined;
   private readonly gitService: GitService;
   private readonly startedAtMs: number;
   private readonly server: net.Server;
@@ -128,6 +131,7 @@ export class DaemonRpcServer {
     this.turnRunner = options.turnRunner;
     this.taskRunOrchestrator = options.taskRunOrchestrator;
     this.recipeOrchestrator = options.recipeOrchestrator;
+    this.secondOpinionOrchestrator = options.secondOpinionOrchestrator;
     this.gitService = options.gitService ?? new GitService();
     this.startedAtMs = options.startedAtMs ?? Date.now();
     this.server = net.createServer((socket) => {
@@ -1097,6 +1101,127 @@ export class DaemonRpcServer {
             reason: typeof params['reason'] === 'string' ? params['reason'] : undefined,
           });
           return makeSuccessResponse(request.id, relayed);
+        }
+
+        case 'changes.integrateBranch': {
+          const projectId = params['projectId'];
+          if (typeof projectId !== 'string' || projectId.length === 0) {
+            return makeErrorResponse(
+              request.id,
+              JSONRPC_ERROR_CODE.INVALID_PARAMS,
+              'changes.integrateBranch requires non-empty projectId.',
+            );
+          }
+          const project = this.db.getProject(projectId);
+          if (!project) {
+            return makeErrorResponse(
+              request.id,
+              JSONRPC_ERROR_CODE.INVALID_PARAMS,
+              `Project not found: ${projectId}`,
+            );
+          }
+          const strategyRaw = params['strategy'];
+          const strategy = strategyRaw === 'squash' || strategyRaw === 'merge' ? strategyRaw : undefined;
+          const result = await this.gitService.integrateTaskBranch(project.rootPath, {
+            targetBranch:
+              typeof params['targetBranch'] === 'string'
+                ? params['targetBranch']
+                : project.defaultBranch,
+            strategy,
+            commitMessage:
+              typeof params['commitMessage'] === 'string' ? params['commitMessage'] : undefined,
+          });
+          return makeSuccessResponse(request.id, result);
+        }
+
+        case 'secondOpinion.start': {
+          if (!this.secondOpinionOrchestrator) {
+            return makeErrorResponse(
+              request.id,
+              JSONRPC_ERROR_CODE.INTERNAL_ERROR,
+              'SecondOpinionOrchestrator is not configured in this daemon instance.',
+            );
+          }
+          const projectId = params['projectId'];
+          const chatId = params['chatId'];
+          const cwd = params['cwd'];
+          const prompt = params['prompt'];
+          const modelAHandle = params['modelAHandle'];
+          const modelBHandle = params['modelBHandle'];
+          if (
+            typeof projectId !== 'string' ||
+            projectId.length === 0 ||
+            typeof chatId !== 'string' ||
+            chatId.length === 0 ||
+            typeof cwd !== 'string' ||
+            cwd.length === 0 ||
+            typeof prompt !== 'string' ||
+            prompt.trim().length === 0 ||
+            typeof modelAHandle !== 'string' ||
+            modelAHandle.length === 0 ||
+            typeof modelBHandle !== 'string' ||
+            modelBHandle.length === 0
+          ) {
+            return makeErrorResponse(
+              request.id,
+              JSONRPC_ERROR_CODE.INVALID_PARAMS,
+              'secondOpinion.start requires projectId, chatId, cwd, prompt, modelAHandle, and modelBHandle.',
+            );
+          }
+          const secondOpinion = await this.secondOpinionOrchestrator.startSecondOpinion({
+            projectId,
+            chatId,
+            cwd,
+            prompt,
+            modelAHandle,
+            modelBHandle,
+          });
+          return makeSuccessResponse(request.id, { secondOpinion });
+        }
+
+        case 'secondOpinion.get': {
+          if (!this.secondOpinionOrchestrator) {
+            return makeSuccessResponse(request.id, { secondOpinion: null });
+          }
+          const secondOpinionId = params['secondOpinionId'];
+          if (typeof secondOpinionId !== 'string' || secondOpinionId.length === 0) {
+            return makeErrorResponse(
+              request.id,
+              JSONRPC_ERROR_CODE.INVALID_PARAMS,
+              'secondOpinion.get requires non-empty secondOpinionId.',
+            );
+          }
+          return makeSuccessResponse(request.id, {
+            secondOpinion: this.secondOpinionOrchestrator.getOpinion(secondOpinionId),
+          });
+        }
+
+        case 'secondOpinion.resolve': {
+          if (!this.secondOpinionOrchestrator) {
+            return makeErrorResponse(
+              request.id,
+              JSONRPC_ERROR_CODE.INTERNAL_ERROR,
+              'SecondOpinionOrchestrator is not configured in this daemon instance.',
+            );
+          }
+          const secondOpinionId = params['secondOpinionId'];
+          const resolution = params['resolution'];
+          if (
+            typeof secondOpinionId !== 'string' ||
+            secondOpinionId.length === 0 ||
+            (resolution !== 'A' && resolution !== 'B' && resolution !== 'SYNTHESIZE')
+          ) {
+            return makeErrorResponse(
+              request.id,
+              JSONRPC_ERROR_CODE.INVALID_PARAMS,
+              'secondOpinion.resolve requires secondOpinionId and valid resolution (A | B | SYNTHESIZE).',
+            );
+          }
+          const secondOpinion = this.secondOpinionOrchestrator.resolveOpinion({
+            secondOpinionId,
+            resolution,
+          });
+          return makeSuccessResponse(request.id, { secondOpinion });
         }
 
         default:

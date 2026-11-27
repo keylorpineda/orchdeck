@@ -5,6 +5,8 @@ import type {
   ChangesApproveResult,
   ChangesDiscardResult,
   ChangesInspectResult,
+  ChangesIntegrateBranchParams,
+  ChangesIntegrateBranchResult,
   ChangesRunTestsResult,
   ChatsArchiveParams,
   ChatsArchiveResult,
@@ -39,6 +41,11 @@ import type {
   RecipeUpdateParams,
   RecipeUpdateResult,
   RecipesListResult,
+  SecondOpinionResolveParams,
+  SecondOpinionResolveResult,
+  SecondOpinionStartParams,
+  SecondOpinionStartResult,
+  SecondOpinionUpdatedNotificationParams,
   TaskRunActionResult,
   TaskRunStartParams,
   TaskRunStartResult,
@@ -88,9 +95,13 @@ interface OrchdeckBridge {
   deleteRecipe(id: string): Promise<RecipeDeleteResult>;
   runRecipe(params: RecipeRunStartParams): Promise<RecipeRunStartResult>;
   relayHandoff(params: HandoffRelayParams): Promise<HandoffRelayResult>;
+  integrateBranch(params: ChangesIntegrateBranchParams): Promise<ChangesIntegrateBranchResult>;
+  startSecondOpinion(params: SecondOpinionStartParams): Promise<SecondOpinionStartResult>;
+  resolveSecondOpinion(params: SecondOpinionResolveParams): Promise<SecondOpinionResolveResult>;
   onTurnEvent(listener: (event: TurnEventNotificationParams) => void): () => void;
   onTaskRunUpdated(listener: (event: TaskRunUpdatedNotificationParams) => void): () => void;
   onRecipeRunUpdated(listener: (event: RecipeRunUpdatedNotificationParams) => void): () => void;
+  onSecondOpinionUpdated(listener: (event: SecondOpinionUpdatedNotificationParams) => void): () => void;
 }
 
 const bridge: OrchdeckBridge = {
@@ -152,6 +163,18 @@ const bridge: OrchdeckBridge = {
     ipcRenderer.invoke('orchdeck:recipes-run', params) as Promise<RecipeRunStartResult>,
   relayHandoff: (params: HandoffRelayParams) =>
     ipcRenderer.invoke('orchdeck:handoff-relay', params) as Promise<HandoffRelayResult>,
+  integrateBranch: (params: ChangesIntegrateBranchParams) =>
+    ipcRenderer.invoke(
+      'orchdeck:changes-integrate-branch',
+      params,
+    ) as Promise<ChangesIntegrateBranchResult>,
+  startSecondOpinion: (params: SecondOpinionStartParams) =>
+    ipcRenderer.invoke('orchdeck:second-opinion-start', params) as Promise<SecondOpinionStartResult>,
+  resolveSecondOpinion: (params: SecondOpinionResolveParams) =>
+    ipcRenderer.invoke(
+      'orchdeck:second-opinion-resolve',
+      params,
+    ) as Promise<SecondOpinionResolveResult>,
   onTurnEvent: (listener: (event: TurnEventNotificationParams) => void) => {
     const handler = (_ipcEvent: IpcRendererEvent, payload: TurnEventNotificationParams): void => {
       listener(payload);
@@ -183,6 +206,18 @@ const bridge: OrchdeckBridge = {
     ipcRenderer.on('orchdeck:recipe-run-updated', handler);
     return () => {
       ipcRenderer.off('orchdeck:recipe-run-updated', handler);
+    };
+  },
+  onSecondOpinionUpdated: (listener: (event: SecondOpinionUpdatedNotificationParams) => void) => {
+    const handler = (
+      _ipcEvent: IpcRendererEvent,
+      payload: SecondOpinionUpdatedNotificationParams,
+    ): void => {
+      listener(payload);
+    };
+    ipcRenderer.on('orchdeck:second-opinion-updated', handler);
+    return () => {
+      ipcRenderer.off('orchdeck:second-opinion-updated', handler);
     };
   },
 };

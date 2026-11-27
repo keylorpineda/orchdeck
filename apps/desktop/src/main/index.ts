@@ -496,6 +496,75 @@ function registerIpcHandlers(): void {
       reason: typeof params['reason'] === 'string' ? params['reason'] : undefined,
     });
   });
+
+  ipcMain.handle('orchdeck:changes-integrate-branch', async (_event, rawParams: unknown) => {
+    const params = asObject(rawParams, 'orchdeck:changes-integrate-branch');
+    const projectId = params['projectId'];
+    if (typeof projectId !== 'string' || projectId.length === 0) {
+      throw new Error('Invalid projectId for orchdeck:changes-integrate-branch.');
+    }
+    const strategyRaw = params['strategy'];
+    const strategy = strategyRaw === 'merge' || strategyRaw === 'squash' ? strategyRaw : undefined;
+    return supervisor.getClient().call('changes.integrateBranch', {
+      projectId,
+      targetBranch:
+        typeof params['targetBranch'] === 'string' ? params['targetBranch'] : undefined,
+      strategy,
+      commitMessage:
+        typeof params['commitMessage'] === 'string' ? params['commitMessage'] : undefined,
+    });
+  });
+
+  ipcMain.handle('orchdeck:second-opinion-start', async (_event, rawParams: unknown) => {
+    const params = asObject(rawParams, 'orchdeck:second-opinion-start');
+    const projectId = params['projectId'];
+    const chatId = params['chatId'];
+    const cwd = params['cwd'];
+    const prompt = params['prompt'];
+    const modelAHandle = params['modelAHandle'];
+    const modelBHandle = params['modelBHandle'];
+    if (
+      typeof projectId !== 'string' ||
+      projectId.length === 0 ||
+      typeof chatId !== 'string' ||
+      chatId.length === 0 ||
+      typeof cwd !== 'string' ||
+      cwd.length === 0 ||
+      typeof prompt !== 'string' ||
+      prompt.trim().length === 0 ||
+      typeof modelAHandle !== 'string' ||
+      modelAHandle.length === 0 ||
+      typeof modelBHandle !== 'string' ||
+      modelBHandle.length === 0
+    ) {
+      throw new Error('Invalid params for orchdeck:second-opinion-start.');
+    }
+    return supervisor.getClient().call('secondOpinion.start', {
+      projectId,
+      chatId,
+      cwd,
+      prompt,
+      modelAHandle,
+      modelBHandle,
+    });
+  });
+
+  ipcMain.handle('orchdeck:second-opinion-resolve', async (_event, rawParams: unknown) => {
+    const params = asObject(rawParams, 'orchdeck:second-opinion-resolve');
+    const secondOpinionId = params['secondOpinionId'];
+    const resolution = params['resolution'];
+    if (
+      typeof secondOpinionId !== 'string' ||
+      secondOpinionId.length === 0 ||
+      (resolution !== 'A' && resolution !== 'B' && resolution !== 'SYNTHESIZE')
+    ) {
+      throw new Error('Invalid params for orchdeck:second-opinion-resolve.');
+    }
+    return supervisor.getClient().call('secondOpinion.resolve', {
+      secondOpinionId,
+      resolution,
+    });
+  });
 }
 
 function configureSecurityHeaders(): void {
@@ -574,6 +643,8 @@ async function bootstrap(): Promise<void> {
       mainWindow.webContents.send('orchdeck:task-run-updated', notification.params);
     } else if (notification.method === 'recipeRun.updated') {
       mainWindow.webContents.send('orchdeck:recipe-run-updated', notification.params);
+    } else if (notification.method === 'secondOpinion.updated') {
+      mainWindow.webContents.send('orchdeck:second-opinion-updated', notification.params);
     }
   });
   registerIpcHandlers();

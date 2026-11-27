@@ -1,7 +1,8 @@
-import { PaperPlaneRight, Stop } from '@phosphor-icons/react';
+import { PaperPlaneRight, Scales, Stop } from '@phosphor-icons/react';
 import { useRef, useState, type FormEvent } from 'react';
 import {
   parseInlineMention,
+  type ApprovalMode,
   type ChangeCardSnapshot,
   type ChatRecord,
   type MessageRecord,
@@ -9,10 +10,11 @@ import {
   type RecipeCreateParams,
   type RecipeRecord,
   type RecipeRunRecord,
+  type SecondOpinionRecord,
+  type SecondOpinionResolution,
   type TaskRunRecord,
   type TestRunResult,
 } from '@orchdeck/shared';
-import type { V01ApprovalMode } from '../state/approval-mode';
 import {
   formatModelLabel,
   type ModelOption,
@@ -28,6 +30,7 @@ import { MarkdownContent } from './MarkdownContent';
 import { ModelPicker } from './ModelPicker';
 import { PlanApprovalCard } from './PlanApprovalCard';
 import { RecipePicker } from './RecipePicker';
+import { SecondOpinionCard } from './SecondOpinionCard';
 import { ToolActivityBlock } from './ToolActivityBlock';
 
 export interface MessageTurnMeta {
@@ -45,12 +48,14 @@ export interface ChatWorkspaceProps {
   readonly modelOptions: readonly ModelOption[];
   readonly chatModelHandle: string;
   readonly turnOverrideHandle: string | null;
-  readonly approvalMode: V01ApprovalMode;
+  readonly approvalMode: ApprovalMode;
   readonly activeTaskRun: TaskRunRecord | null;
   readonly planActionBusy: boolean;
   readonly recipes: readonly RecipeRecord[];
   readonly selectedRecipeId: string | null;
   readonly activeRecipeRun: RecipeRunRecord | null;
+  readonly activeSecondOpinion: SecondOpinionRecord | null;
+  readonly secondOpinionBusy: boolean;
   readonly rateLimitBanner: string | null;
   readonly relayingHandoff: boolean;
   readonly handoffNotice: string | null;
@@ -60,15 +65,22 @@ export interface ChatWorkspaceProps {
   readonly runningTests: boolean;
   readonly committingChanges: boolean;
   readonly discardingChanges: boolean;
+  readonly integratingBranch: boolean;
   readonly changeError: string | null;
   readonly changeNotice: string | null;
   readonly onChangeChatModel: (handle: string) => void;
   readonly onChangeTurnOverride: (handle: string | null) => void;
-  readonly onChangeApprovalMode: (mode: V01ApprovalMode) => void;
+  readonly onChangeApprovalMode: (mode: ApprovalMode) => void;
   readonly onSelectRecipe: (recipeId: string | null) => void;
   readonly onCreateRecipe: (params: RecipeCreateParams) => Promise<void>;
   readonly onDeleteRecipe: (recipeId: string) => Promise<void>;
   readonly onRelayHandoff: (targetModelHandle: string) => Promise<void>;
+  readonly onStartSecondOpinion: (prompt: string, modelBHandle: string) => Promise<void>;
+  readonly onResolveSecondOpinion: (
+    secondOpinionId: string,
+    resolution: SecondOpinionResolution,
+    followUpPrompt: string,
+  ) => Promise<void>;
   readonly onApprovePlan: (taskRunId: string) => Promise<void>;
   readonly onRejectPlan: (taskRunId: string) => Promise<void>;
   readonly onSendPrompt: (prompt: string) => Promise<void>;
@@ -78,6 +90,7 @@ export interface ChatWorkspaceProps {
   readonly onRunTests: () => Promise<void>;
   readonly onApproveChanges: (commitMessage: string) => Promise<void>;
   readonly onDiscardChanges: () => Promise<void>;
+  readonly onIntegrateBranch: () => Promise<void>;
 }
 
 export function ChatWorkspace({
@@ -95,6 +108,8 @@ export function ChatWorkspace({
   recipes,
   selectedRecipeId,
   activeRecipeRun,
+  activeSecondOpinion,
+  secondOpinionBusy,
   rateLimitBanner,
   relayingHandoff,
   handoffNotice,
@@ -104,6 +119,7 @@ export function ChatWorkspace({
   runningTests,
   committingChanges,
   discardingChanges,
+  integratingBranch,
   changeError,
   changeNotice,
   onChangeChatModel,
@@ -113,6 +129,8 @@ export function ChatWorkspace({
   onCreateRecipe,
   onDeleteRecipe,
   onRelayHandoff,
+  onStartSecondOpinion,
+  onResolveSecondOpinion,
   onApprovePlan,
   onRejectPlan,
   onSendPrompt,
@@ -122,6 +140,7 @@ export function ChatWorkspace({
   onRunTests,
   onApproveChanges,
   onDiscardChanges,
+  onIntegrateBranch,
 }: ChatWorkspaceProps) {
   const [prompt, setPrompt] = useState('');
   const [sending, setSending] = useState(false);
@@ -286,6 +305,22 @@ export function ChatWorkspace({
         ) : null}
       </div>
 
+      {activeTaskRun?.roleViolationDetected ? (
+        <div className="surface-card border-l-2 border-l-fail bg-fail-bg px-3 py-2 text-[12px] text-fail">
+          {activeTaskRun.errorMessage ??
+            'Read-only guard detected an unauthorized edit attempt and reverted repository files.'}
+        </div>
+      ) : null}
+
+      {activeSecondOpinion ? (
+        <SecondOpinionCard
+          opinion={activeSecondOpinion}
+          modelOptions={modelOptions}
+          busy={secondOpinionBusy}
+          onResolve={onResolveSecondOpinion}
+        />
+      ) : null}
+
       {activeRecipeRun ? (
         <CoordinationLogCard recipeRun={activeRecipeRun} modelOptions={modelOptions} />
       ) : null}
@@ -311,6 +346,7 @@ export function ChatWorkspace({
       {project.isValidGitRepo ? (
         <ChangeCard
           branchName={project.currentBranch}
+          defaultBranch={project.defaultBranch}
           testCommand={project.testCommand}
           snapshot={changeSnapshot}
           testResult={testResult}
@@ -318,12 +354,14 @@ export function ChatWorkspace({
           runningTests={runningTests}
           committing={committingChanges}
           discarding={discardingChanges}
+          integrating={integratingBranch}
           errorMessage={changeError}
           lastNotice={changeNotice}
           onRefresh={onRefreshChanges}
           onRunTests={onRunTests}
           onApprove={onApproveChanges}
           onDiscard={onDiscardChanges}
+          onIntegrateBranch={onIntegrateBranch}
           onRequestChanges={(contextSummary) => {
             setPrompt((prev) => (prev.trim().length === 0 ? contextSummary : prev));
             composerRef.current?.focus();
@@ -334,7 +372,11 @@ export function ChatWorkspace({
       <form
         onSubmit={(e) => void handleSubmit(e)}
         className={`surface-card p-3 ${
-          approvalMode === 'express' ? 'border-t-2 border-t-warn' : ''
+          approvalMode === 'branch_pilot'
+            ? 'border-t-2 border-t-accent'
+            : approvalMode === 'express'
+              ? 'border-t-2 border-t-warn'
+              : ''
         }`}
       >
         <textarea
@@ -392,14 +434,37 @@ export function ChatWorkspace({
               Stop
             </button>
           ) : (
-            <button
-              type="submit"
-              disabled={sending || prompt.trim().length === 0}
-              className="orch-transition inline-flex items-center gap-1.5 rounded-[6px] border border-accent bg-accent px-3 py-1 text-[12px] font-medium text-surface hover:border-accent-hover hover:bg-accent-hover disabled:opacity-50"
-            >
-              <PaperPlaneRight size={13} weight="regular" />
-              Send
-            </button>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                disabled={sending || prompt.trim().length === 0 || modelOptions.length < 2}
+                onClick={() => {
+                  const trimmed = prompt.trim();
+                  if (!trimmed) {
+                    return;
+                  }
+                  const partner =
+                    modelOptions.find((opt) => opt.handle !== effectiveHandle)?.handle ??
+                    modelOptions[0]?.handle ??
+                    effectiveHandle;
+                  setPrompt('');
+                  void onStartSecondOpinion(trimmed, partner);
+                }}
+                title="Compare 2 read-only models side by side"
+                className="orch-transition inline-flex items-center gap-1.5 rounded-[6px] border border-border-strong bg-surface px-2.5 py-1 text-[12px] text-ink hover:border-accent disabled:opacity-50"
+              >
+                <Scales size={13} weight="regular" />
+                2nd Opinion
+              </button>
+              <button
+                type="submit"
+                disabled={sending || prompt.trim().length === 0}
+                className="orch-transition inline-flex items-center gap-1.5 rounded-[6px] border border-accent bg-accent px-3 py-1 text-[12px] font-medium text-surface hover:border-accent-hover hover:bg-accent-hover disabled:opacity-50"
+              >
+                <PaperPlaneRight size={13} weight="regular" />
+                Send
+              </button>
+            </div>
           )}
         </div>
       </form>
