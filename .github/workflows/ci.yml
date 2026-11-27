@@ -36,11 +36,11 @@ jobs:
       - name: Run repository and workspace lint
         run: pnpm run lint
 
+      - name: Run workspace build
+        run: pnpm run build
+
       - name: Run workspace typecheck
         run: pnpm run typecheck
 
       - name: Run workspace tests
         run: pnpm run test
-
-      - name: Run workspace build
-        run: pnpm run build
