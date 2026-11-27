@@ -60,6 +60,7 @@ export class TurnRunner {
   private readonly registry: AdapterRegistry;
   private readonly db: DaemonDatabase;
   private readonly emitEvent: TurnEventSink;
+  private readonly contextBuilder?: ((cwd: string) => string) | undefined;
   private readonly listeners = new Set<TurnEventSink>();
   private readonly activeTurns = new Map<string, ActiveTurn>();
 
@@ -67,10 +68,12 @@ export class TurnRunner {
     readonly registry: AdapterRegistry;
     readonly db: DaemonDatabase;
     readonly emitEvent: TurnEventSink;
+    readonly contextBuilder?: ((cwd: string) => string) | undefined;
   }) {
     this.registry = options.registry;
     this.db = options.db;
     this.emitEvent = options.emitEvent;
+    this.contextBuilder = options.contextBuilder;
   }
 
   subscribeEvents(listener: TurnEventSink): () => void {
@@ -100,8 +103,11 @@ export class TurnRunner {
       approvalMode: params.approvalMode ?? 'architect',
     });
 
+    const contextPrefix = this.contextBuilder?.(params.cwd) ?? '';
+    const effectivePrompt = contextPrefix.length > 0 ? `${contextPrefix}\n\n${params.prompt}` : params.prompt;
+
     const turnId = options.turnId ?? crypto.randomUUID();
-    const completion = this.runStream(turnId, session.sessionId, parsed.modelId, adapter, params.prompt);
+    const completion = this.runStream(turnId, session.sessionId, parsed.modelId, adapter, effectivePrompt);
 
     this.activeTurns.set(turnId, {
       turnId,

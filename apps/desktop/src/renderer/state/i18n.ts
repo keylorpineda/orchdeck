@@ -53,6 +53,17 @@ export interface UiDictionary {
   readonly zompoWaiting: string;
   readonly zompoCommitted: string;
   readonly inspectorTitle: string;
+  readonly pluginsTab: string;
+  readonly memoryTab: string;
+  readonly pluginsFilterAll: string;
+  readonly activeInRepo: string;
+  readonly installedCatalog: string;
+  readonly portableSkills: string;
+  readonly mcpHubTitle: string;
+  readonly mcpApproveCall: string;
+  readonly mcpDenyCall: string;
+  readonly managedNativelyCli: string;
+  readonly noPluginsFound: string;
 }
 
 const DICTIONARIES: Readonly<Record<UiLocale, UiDictionary>> = {
@@ -86,6 +97,17 @@ const DICTIONARIES: Readonly<Record<UiLocale, UiDictionary>> = {
     zompoWaiting: 'Zompo awaits your sign-off.',
     zompoCommitted: 'Zompo stacked a clean commit on branch.',
     inspectorTitle: 'Inspector',
+    pluginsTab: 'Plugins & MCP',
+    memoryTab: 'Memory',
+    pluginsFilterAll: 'All',
+    activeInRepo: 'Active in this repo',
+    installedCatalog: 'Installed',
+    portableSkills: 'Portable Skills (SKILL.md)',
+    mcpHubTitle: 'Local MCP Hub',
+    mcpApproveCall: 'Approve',
+    mcpDenyCall: 'Deny',
+    managedNativelyCli: 'Managed natively by CLI',
+    noPluginsFound: 'No local plugins discovered yet.',
   },
   es: {
     send: 'Enviar',
@@ -117,6 +139,17 @@ const DICTIONARIES: Readonly<Record<UiLocale, UiDictionary>> = {
     zompoWaiting: 'Zompo espera tu visto bueno.',
     zompoCommitted: 'Zompo apiló un commit limpio en la rama.',
     inspectorTitle: 'Inspector',
+    pluginsTab: 'Plugins y MCP',
+    memoryTab: 'Memoria',
+    pluginsFilterAll: 'Todos',
+    activeInRepo: 'Activos en este repo',
+    installedCatalog: 'Instalados',
+    portableSkills: 'Skills Portables (SKILL.md)',
+    mcpHubTitle: 'Hub MCP Local',
+    mcpApproveCall: 'Aprobar',
+    mcpDenyCall: 'Denegar',
+    managedNativelyCli: 'Gestionado nativamente por CLI',
+    noPluginsFound: 'Aún no se detectaron plugins locales.',
   },
 };
 

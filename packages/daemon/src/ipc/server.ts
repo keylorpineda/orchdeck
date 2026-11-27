@@ -33,6 +33,8 @@ import type { RecipeOrchestrator } from '../fusion/recipe-orchestrator.js';
 import type { SecondOpinionOrchestrator } from '../fusion/second-opinion-orchestrator.js';
 import { GitService } from '../git/git-service.js';
 import { WorktreeManager } from '../git/worktree-manager.js';
+import { LocalMcpHub } from '../mcp/local-mcp-hub.js';
+import { PluginInspector } from '../plugins/plugin-inspector.js';
 import { ProviderCooldownTracker, buildUsageSummaryWithRadar } from '../usage/quota-radar.js';
 
 const MAX_LINE_BYTES = 1024 * 1024;
@@ -47,6 +49,8 @@ export interface DaemonRpcServerOptions {
   readonly recipeOrchestrator?: RecipeOrchestrator | undefined;
   readonly secondOpinionOrchestrator?: SecondOpinionOrchestrator | undefined;
   readonly cooldownTracker?: ProviderCooldownTracker | undefined;
+  readonly pluginInspector?: PluginInspector | undefined;
+  readonly mcpHub?: LocalMcpHub | undefined;
   readonly worktreeManager?: WorktreeManager | undefined;
   readonly gitService?: GitService | undefined;
   readonly startedAtMs?: number | undefined;
@@ -119,6 +123,8 @@ export class DaemonRpcServer {
   private readonly recipeOrchestrator: RecipeOrchestrator | undefined;
   private readonly secondOpinionOrchestrator: SecondOpinionOrchestrator | undefined;
   private readonly cooldownTracker: ProviderCooldownTracker | undefined;
+  private readonly pluginInspector: PluginInspector;
+  private readonly mcpHub: LocalMcpHub | undefined;
   private readonly worktreeManager: WorktreeManager;
   private readonly gitService: GitService;
   private readonly startedAtMs: number;
@@ -139,6 +145,8 @@ export class DaemonRpcServer {
     this.recipeOrchestrator = options.recipeOrchestrator;
     this.secondOpinionOrchestrator = options.secondOpinionOrchestrator;
     this.cooldownTracker = options.cooldownTracker;
+    this.pluginInspector = options.pluginInspector ?? new PluginInspector({ db: options.db });
+    this.mcpHub = options.mcpHub;
     this.gitService = options.gitService ?? new GitService();
     this.worktreeManager = options.worktreeManager ?? new WorktreeManager(this.gitService);
     this.startedAtMs = options.startedAtMs ?? Date.now();
@@ -1387,6 +1395,92 @@ export class DaemonRpcServer {
           const activeSet = new Set(this.db.listProjectChatWorktrees(project.id));
           const pruned = await this.worktreeManager.pruneOrphanWorktrees(project.rootPath, activeSet);
           return makeSuccessResponse(request.id, pruned);
+        }
+
+        case 'plugins.inspect': {
+          const projectId = typeof params['projectId'] === 'string' ? params['projectId'] : undefined;
+          const repoPath = typeof params['repoPath'] === 'string' ? params['repoPath'] : undefined;
+          const result = this.pluginInspector.inspect({ projectId, repoPath });
+          this.mcpHub?.setServers(result.mcpServers);
+          return makeSuccessResponse(request.id, result);
+        }
+
+        case 'plugins.toggle': {
+          const projectId = params['projectId'];
+          const pluginId = params['pluginId'];
+          const enabled = params['enabled'];
+          if (
+            typeof projectId !== 'string' ||
+            projectId.length === 0 ||
+            typeof pluginId !== 'string' ||
+            pluginId.length === 0 ||
+            typeof enabled !== 'boolean'
+          ) {
+            return makeErrorResponse(
+              request.id,
+              JSONRPC_ERROR_CODE.INVALID_PARAMS,
+              'plugins.toggle requires projectId, pluginId, and boolean enabled.',
+            );
+          }
+          const resolved = this.pluginInspector.togglePlugin(projectId, pluginId, enabled);
+          return makeSuccessResponse(request.id, { pluginId, enabled: resolved });
+        }
+
+        case 'skills.toggle': {
+          const projectId = params['projectId'];
+          const skillId = params['skillId'];
+          const enabled = params['enabled'];
+          if (
+            typeof projectId !== 'string' ||
+            projectId.length === 0 ||
+            typeof skillId !== 'string' ||
+            skillId.length === 0 ||
+            typeof enabled !== 'boolean'
+          ) {
+            return makeErrorResponse(
+              request.id,
+              JSONRPC_ERROR_CODE.INVALID_PARAMS,
+              'skills.toggle requires projectId, skillId, and boolean enabled.',
+            );
+          }
+          const resolved = this.pluginInspector.toggleSkill(projectId, skillId, enabled);
+          return makeSuccessResponse(request.id, { skillId, enabled: resolved });
+        }
+
+        case 'mcp.status': {
+          const projectId = typeof params['projectId'] === 'string' ? params['projectId'] : undefined;
+          if (projectId) {
+            const inspected = this.pluginInspector.inspect({ projectId });
+            this.mcpHub?.setServers(inspected.mcpServers);
+          }
+          return makeSuccessResponse(request.id, {
+            status: this.mcpHub?.getStatus() ?? {
+              running: false,
+              url: null,
+              port: null,
+              servers: [],
+              pendingApprovals: [],
+            },
+          });
+        }
+
+        case 'mcp.decideApproval': {
+          const approvalId = params['approvalId'];
+          const decision = params['decision'];
+          if (
+            typeof approvalId !== 'string' ||
+            approvalId.length === 0 ||
+            (decision !== 'approve' && decision !== 'deny')
+          ) {
+            return makeErrorResponse(
+              request.id,
+              JSONRPC_ERROR_CODE.INVALID_PARAMS,
+              'mcp.decideApproval requires approvalId and decision ("approve" | "deny").',
+            );
+          }
+          return makeSuccessResponse(request.id, {
+            resolved: this.mcpHub ? this.mcpHub.decideApproval(approvalId, decision) : false,
+          });
         }
 
         default:

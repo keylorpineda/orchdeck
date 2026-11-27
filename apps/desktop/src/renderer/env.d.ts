@@ -23,9 +23,18 @@ import type {
   HandoffRelayResult,
   KvGetResult,
   KvSetResult,
+  McpApprovalRequiredNotificationParams,
+  McpDecideApprovalParams,
+  McpDecideApprovalResult,
+  McpStatusParams,
+  McpStatusResult,
   MessagesAppendParams,
   MessagesAppendResult,
   MessagesListResult,
+  PluginsInspectParams,
+  PluginsInspectResult,
+  PluginsToggleParams,
+  PluginsToggleResult,
   ProjectsCreateParams,
   ProjectsCreateResult,
   ProjectsDeleteResult,
@@ -47,6 +56,8 @@ import type {
   SecondOpinionStartParams,
   SecondOpinionStartResult,
   SecondOpinionUpdatedNotificationParams,
+  SkillsToggleParams,
+  SkillsToggleResult,
   TaskRunActionResult,
   TaskRunStartParams,
   TaskRunStartResult,
@@ -110,6 +121,12 @@ export interface OrchdeckApi {
   listWorktrees(projectId: string): Promise<WorktreesListResult>;
   removeWorktree(params: WorktreesRemoveParams): Promise<WorktreesRemoveResult>;
   pruneWorktrees(projectId: string): Promise<WorktreesPruneResult>;
+  inspectPlugins(params?: PluginsInspectParams): Promise<PluginsInspectResult>;
+  togglePlugin(params: PluginsToggleParams): Promise<PluginsToggleResult>;
+  toggleSkill(params: SkillsToggleParams): Promise<SkillsToggleResult>;
+  getMcpStatus(params?: McpStatusParams): Promise<McpStatusResult>;
+  decideMcpApproval(params: McpDecideApprovalParams): Promise<McpDecideApprovalResult>;
+  onMcpApprovalRequired(listener: (event: McpApprovalRequiredNotificationParams) => void): () => void;
   onTurnEvent(listener: (event: TurnEventNotificationParams) => void): () => void;
   onTaskRunUpdated(listener: (event: TaskRunUpdatedNotificationParams) => void): () => void;
   onRecipeRunUpdated(listener: (event: RecipeRunUpdatedNotificationParams) => void): () => void;

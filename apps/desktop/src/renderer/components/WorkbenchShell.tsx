@@ -164,10 +164,16 @@ export function WorkbenchShell({
                 <Stack size={14} weight="regular" />
                 Recipes
               </span>
-              <span className="inline-flex items-center gap-1.5 rounded-[6px] px-2 py-1 text-[12px]">
+              <button
+                type="button"
+                onClick={() => setDrawerOpen((prev) => !prev)}
+                className={`orch-transition inline-flex items-center gap-1.5 rounded-[6px] px-2 py-1 text-[12px] ${
+                  drawerOpen ? 'bg-accent-soft text-accent' : 'hover:bg-inset hover:text-ink'
+                }`}
+              >
                 <PuzzlePiece size={14} weight="regular" />
                 Plugins
-              </span>
+              </button>
               <span
                 className="inline-flex items-center justify-center rounded-[6px] p-1"
                 title="Settings"

@@ -680,6 +680,72 @@ function registerIpcHandlers(): void {
     }
     return supervisor.getClient().call('worktrees.prune', { projectId });
   });
+
+  ipcMain.handle('orchdeck:plugins-inspect', async (_event, rawParams: unknown) => {
+    const params = rawParams !== undefined ? asObject(rawParams, 'orchdeck:plugins-inspect') : {};
+    const projectId = params['projectId'];
+    const repoPath = params['repoPath'];
+    return supervisor.getClient().call('plugins.inspect', {
+      projectId: typeof projectId === 'string' && projectId.length > 0 ? projectId : undefined,
+      repoPath: typeof repoPath === 'string' && repoPath.length > 0 ? repoPath : undefined,
+    });
+  });
+
+  ipcMain.handle('orchdeck:plugins-toggle', async (_event, rawParams: unknown) => {
+    const params = asObject(rawParams, 'orchdeck:plugins-toggle');
+    const projectId = params['projectId'];
+    const pluginId = params['pluginId'];
+    const enabled = params['enabled'];
+    if (
+      typeof projectId !== 'string' ||
+      projectId.length === 0 ||
+      typeof pluginId !== 'string' ||
+      pluginId.length === 0 ||
+      typeof enabled !== 'boolean'
+    ) {
+      throw new Error('Invalid params for orchdeck:plugins-toggle.');
+    }
+    return supervisor.getClient().call('plugins.toggle', { projectId, pluginId, enabled });
+  });
+
+  ipcMain.handle('orchdeck:skills-toggle', async (_event, rawParams: unknown) => {
+    const params = asObject(rawParams, 'orchdeck:skills-toggle');
+    const projectId = params['projectId'];
+    const skillId = params['skillId'];
+    const enabled = params['enabled'];
+    if (
+      typeof projectId !== 'string' ||
+      projectId.length === 0 ||
+      typeof skillId !== 'string' ||
+      skillId.length === 0 ||
+      typeof enabled !== 'boolean'
+    ) {
+      throw new Error('Invalid params for orchdeck:skills-toggle.');
+    }
+    return supervisor.getClient().call('skills.toggle', { projectId, skillId, enabled });
+  });
+
+  ipcMain.handle('orchdeck:mcp-status', async (_event, rawParams: unknown) => {
+    const params = rawParams !== undefined ? asObject(rawParams, 'orchdeck:mcp-status') : {};
+    const projectId = params['projectId'];
+    return supervisor.getClient().call('mcp.status', {
+      projectId: typeof projectId === 'string' && projectId.length > 0 ? projectId : undefined,
+    });
+  });
+
+  ipcMain.handle('orchdeck:mcp-decide-approval', async (_event, rawParams: unknown) => {
+    const params = asObject(rawParams, 'orchdeck:mcp-decide-approval');
+    const approvalId = params['approvalId'];
+    const decision = params['decision'];
+    if (
+      typeof approvalId !== 'string' ||
+      approvalId.length === 0 ||
+      (decision !== 'approve' && decision !== 'deny')
+    ) {
+      throw new Error('Invalid params for orchdeck:mcp-decide-approval.');
+    }
+    return supervisor.getClient().call('mcp.decideApproval', { approvalId, decision });
+  });
 }
 
 function configureSecurityHeaders(): void {
@@ -760,6 +826,8 @@ async function bootstrap(): Promise<void> {
       mainWindow.webContents.send('orchdeck:recipe-run-updated', notification.params);
     } else if (notification.method === 'secondOpinion.updated') {
       mainWindow.webContents.send('orchdeck:second-opinion-updated', notification.params);
+    } else if (notification.method === 'mcp.approvalRequired') {
+      mainWindow.webContents.send('orchdeck:mcp-approval-required', notification.params);
     }
   });
   registerIpcHandlers();
