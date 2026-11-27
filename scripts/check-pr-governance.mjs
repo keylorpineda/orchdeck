@@ -52,9 +52,26 @@ if (!prTitle) {
   }
 }
 
-const strippedBody = prBody
-  .replace(/<!--[\s\S]*?-->/g, '')
-  .trim();
+function stripHtmlComments(text) {
+  let result = '';
+  let cursor = 0;
+  while (cursor < text.length) {
+    const start = text.indexOf('<!--', cursor);
+    if (start === -1) {
+      result += text.slice(cursor);
+      break;
+    }
+    result += text.slice(cursor, start);
+    const end = text.indexOf('-->', start + 4);
+    if (end === -1) {
+      break;
+    }
+    cursor = end + 3;
+  }
+  return result.trim();
+}
+
+const strippedBody = stripHtmlComments(prBody);
 
 if (strippedBody.length < 80) {
   errors.push(
