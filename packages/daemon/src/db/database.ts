@@ -7,8 +7,10 @@ import {
   isProviderId,
   redactSecrets,
   type ChatRecord,
+  type MemoryCategory,
   type MessageRecord,
   type MessageRole,
+  type ProjectMemoryEntry,
   type ProjectRecord,
   type ProviderId,
   type ProviderUsageSummary,
@@ -904,6 +906,96 @@ export class DaemonDatabase {
       throw new Error('Built-in recipes cannot be deleted.');
     }
     const result = this.db.prepare('DELETE FROM recipes WHERE id = ?').run(id);
+    return Number(result.changes) > 0;
+  }
+
+  listProjectMemory(projectId: string): ProjectMemoryEntry[] {
+    const rows = this.db
+      .prepare(
+        `
+        SELECT id, project_id, category, title, content, created_at, updated_at
+        FROM project_memory
+        WHERE project_id = ?
+        ORDER BY updated_at DESC, created_at DESC
+        `,
+      )
+      .all(projectId) as Array<Record<string, unknown>>;
+
+    return rows.map((row) => ({
+      id: String(row['id']),
+      projectId: String(row['project_id']),
+      category:
+        row['category'] === 'decision' ||
+        row['category'] === 'convention' ||
+        row['category'] === 'open_item'
+          ? row['category']
+          : 'convention',
+      title: String(row['title']),
+      content: String(row['content']),
+      createdAt: String(row['created_at']),
+      updatedAt: String(row['updated_at']),
+    }));
+  }
+
+  upsertProjectMemory(input: {
+    readonly projectId: string;
+    readonly id?: string | undefined;
+    readonly category: MemoryCategory;
+    readonly title: string;
+    readonly content: string;
+  }): ProjectMemoryEntry {
+    const now = new Date().toISOString();
+    const title = input.title.trim();
+    const content = input.content.trim();
+    if (title.length === 0 || content.length === 0) {
+      throw new Error('Memory entry requires non-empty title and content.');
+    }
+
+    if (input.id) {
+      const existing = this.db
+        .prepare('SELECT id, created_at FROM project_memory WHERE id = ? AND project_id = ?')
+        .get(input.id, input.projectId) as Record<string, unknown> | undefined;
+      if (existing) {
+        this.db
+          .prepare(
+            'UPDATE project_memory SET category = ?, title = ?, content = ?, updated_at = ? WHERE id = ?',
+          )
+          .run(input.category, title, content, now, input.id);
+        return {
+          id: input.id,
+          projectId: input.projectId,
+          category: input.category,
+          title,
+          content,
+          createdAt: String(existing['created_at']),
+          updatedAt: now,
+        };
+      }
+    }
+
+    const id = input.id ?? crypto.randomUUID();
+    this.db
+      .prepare(
+        `
+        INSERT INTO project_memory (id, project_id, category, title, content, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        `,
+      )
+      .run(id, input.projectId, input.category, title, content, now, now);
+
+    return {
+      id,
+      projectId: input.projectId,
+      category: input.category,
+      title,
+      content,
+      createdAt: now,
+      updatedAt: now,
+    };
+  }
+
+  deleteProjectMemory(id: string): boolean {
+    const result = this.db.prepare('DELETE FROM project_memory WHERE id = ?').run(id);
     return Number(result.changes) > 0;
   }
 

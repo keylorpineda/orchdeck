@@ -13,6 +13,7 @@ import { WorktreeManager } from './git/worktree-manager.js';
 import { DaemonRpcServer } from './ipc/server.js';
 import { resolveDefaultDataDir, resolveSocketPath } from './ipc/socket-path.js';
 import { LocalMcpHub } from './mcp/local-mcp-hub.js';
+import { buildBudgetedMemoryInjection } from './memory/project-memory.js';
 import { PluginInspector } from './plugins/plugin-inspector.js';
 import { ProviderCooldownTracker } from './usage/quota-radar.js';
 
@@ -64,10 +65,12 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Run
       if (!matchedProject) {
         return '';
       }
-      return pluginInspector.buildSkillInjectionPrompt({
+      const memoryPrompt = buildBudgetedMemoryInjection(db.listProjectMemory(matchedProject.id));
+      const skillPrompt = pluginInspector.buildSkillInjectionPrompt({
         projectId: matchedProject.id,
         repoPath: matchedProject.rootPath,
       });
+      return [memoryPrompt, skillPrompt].filter((part) => part.length > 0).join('\n\n');
     },
   });
 

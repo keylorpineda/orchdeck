@@ -190,3 +190,22 @@ export type {
   SkillsToggleParams,
   SkillsToggleResult,
 } from './plugins-mcp.js';
+
+export type {
+  MemoryCategory,
+  MemoryDeleteParams,
+  MemoryDeleteResult,
+  MemoryDocTarget,
+  MemoryImportDocParams,
+  MemoryImportDocResult,
+  MemoryListParams,
+  MemoryListResult,
+  MemoryProposal,
+  MemoryProposeFromChangeParams,
+  MemoryProposeFromChangeResult,
+  MemorySyncDocParams,
+  MemorySyncDocResult,
+  MemoryUpsertParams,
+  MemoryUpsertResult,
+  ProjectMemoryEntry,
+} from './memory.js';

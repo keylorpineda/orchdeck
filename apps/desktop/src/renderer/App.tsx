@@ -9,7 +9,11 @@ import {
   type DiscoveredSkill,
   type McpApprovalRequiredNotificationParams,
   type McpHubStatus,
+  type MemoryCategory,
+  type MemoryDocTarget,
+  type MemoryProposal,
   type MessageRecord,
+  type ProjectMemoryEntry,
   type ProjectWithGitStatus,
   type RecipeCreateParams,
   type RecipeRecord,
@@ -25,8 +29,9 @@ import {
   type UsageSummaryResult,
 } from '@orchdeck/shared';
 import { ChatWorkspace, type MessageTurnMeta } from './components/ChatWorkspace';
-import { LanguageProvider } from './components/LanguageProvider';
+import { LanguageProvider, useLanguage } from './components/LanguageProvider';
 import { PluginsDrawer } from './components/PluginsDrawer';
+import { ProjectMemoryPanel } from './components/ProjectMemoryPanel';
 import { ProjectSidebar } from './components/ProjectSidebar';
 import { ThemeProvider } from './components/ThemeProvider';
 import { UsageQuotaRadar } from './components/UsageQuotaRadar';
@@ -83,6 +88,14 @@ function WorkbenchApp() {
   const [skills, setSkills] = useState<readonly DiscoveredSkill[]>([]);
   const [mcpStatus, setMcpStatus] = useState<McpHubStatus | null>(null);
   const [loadingInspector, setLoadingInspector] = useState(false);
+  const [inspectorTab, setInspectorTab] = useState<'plugins' | 'memory'>('plugins');
+  const [memoryEntries, setMemoryEntries] = useState<readonly ProjectMemoryEntry[]>([]);
+  const [memoryPromptPreview, setMemoryPromptPreview] = useState('');
+  const [memoryMaxChars, setMemoryMaxChars] = useState(1800);
+  const [memoryError, setMemoryError] = useState<string | null>(null);
+  const [memoryStatus, setMemoryStatus] = useState<string | null>(null);
+  const [memoryProposal, setMemoryProposal] = useState<MemoryProposal | null>(null);
+  const { dict } = useLanguage();
   const [changeError, setChangeError] = useState<string | null>(null);
   const [changeNotice, setChangeNotice] = useState<string | null>(null);
 
@@ -115,13 +128,19 @@ function WorkbenchApp() {
     }
     setLoadingInspector(true);
     try {
-      const [inspected, mcpRes] = await Promise.all([
+      const [inspected, mcpRes, memoryRes] = await Promise.all([
         api.inspectPlugins(projectId ? { projectId } : {}),
         api.getMcpStatus(projectId ? { projectId } : {}),
+        projectId
+          ? api.listProjectMemory(projectId)
+          : Promise.resolve({ entries: [], promptPreview: '', maxChars: 1800 }),
       ]);
       setPlugins(inspected.plugins);
       setSkills(inspected.skills);
       setMcpStatus(mcpRes.status);
+      setMemoryEntries(memoryRes.entries);
+      setMemoryPromptPreview(memoryRes.promptPreview);
+      setMemoryMaxChars(memoryRes.maxChars);
     } finally {
       setLoadingInspector(false);
     }
@@ -716,6 +735,16 @@ function WorkbenchApp() {
       ]);
       setProjects(refreshedProjects);
       setChangeNotice(`Committed ${commitSha.slice(0, 7)} cleanly on ${branch}.`);
+      try {
+        const { proposal } = await api.proposeMemoryFromChange({
+          projectId: selectedProjectId,
+          chatId: selectedChatId ?? undefined,
+          commitMessage,
+        });
+        setMemoryProposal(proposal);
+      } catch {
+        // Proposal generation is optional assistance; ignore silently if tree is already clean.
+      }
     } catch (err) {
       setChangeError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -901,6 +930,83 @@ function WorkbenchApp() {
     await refreshInspector(selectedProjectId);
   };
 
+  const handleUpsertMemory = async (input: {
+    readonly category: MemoryCategory;
+    readonly title: string;
+    readonly content: string;
+  }): Promise<void> => {
+    const api = window.orchdeck;
+    if (!api || !selectedProjectId) {
+      return;
+    }
+    setMemoryError(null);
+    setMemoryStatus(null);
+    try {
+      await api.upsertProjectMemory({
+        projectId: selectedProjectId,
+        category: input.category,
+        title: input.title,
+        content: input.content,
+      });
+      await refreshInspector(selectedProjectId);
+    } catch (err) {
+      setMemoryError(err instanceof Error ? err.message : String(err));
+    }
+  };
+
+  const handleDeleteMemory = async (id: string): Promise<void> => {
+    const api = window.orchdeck;
+    if (!api) {
+      return;
+    }
+    setMemoryError(null);
+    await api.deleteProjectMemory(id);
+    await refreshInspector(selectedProjectId);
+  };
+
+  const handleSyncMemoryDoc = async (target: MemoryDocTarget): Promise<void> => {
+    const api = window.orchdeck;
+    if (!api || !selectedProjectId) {
+      return;
+    }
+    setMemoryError(null);
+    setMemoryStatus(null);
+    try {
+      const res = await api.syncMemoryDoc({ projectId: selectedProjectId, target });
+      setMemoryStatus(`Synced ${res.entryCount} entries to ${res.target}.`);
+    } catch (err) {
+      setMemoryError(err instanceof Error ? err.message : String(err));
+    }
+  };
+
+  const handleImportMemoryDoc = async (target: MemoryDocTarget): Promise<void> => {
+    const api = window.orchdeck;
+    if (!api || !selectedProjectId) {
+      return;
+    }
+    setMemoryError(null);
+    setMemoryStatus(null);
+    try {
+      const res = await api.importMemoryDoc({ projectId: selectedProjectId, target });
+      setMemoryStatus(`Imported ${res.importedCount} entries from ${res.target}.`);
+      await refreshInspector(selectedProjectId);
+    } catch (err) {
+      setMemoryError(err instanceof Error ? err.message : String(err));
+    }
+  };
+
+  const handleAcceptMemoryProposal = async (): Promise<void> => {
+    if (!memoryProposal) {
+      return;
+    }
+    await handleUpsertMemory({
+      category: memoryProposal.category,
+      title: memoryProposal.title,
+      content: memoryProposal.content,
+    });
+    setMemoryProposal(null);
+  };
+
   const activeProject = projects.find((p) => p.id === selectedProjectId) ?? null;
   const activeChats = activeProject ? (chatsByProject[activeProject.id] ?? []) : [];
   const activeChat = activeChats.find((c) => c.id === selectedChatId) ?? null;
@@ -910,25 +1016,67 @@ function WorkbenchApp() {
       projectName={activeProject?.name}
       branchName={activeChat?.worktreeBranch ?? activeProject?.currentBranch ?? undefined}
       drawerContent={
-        <PluginsDrawer
-          projectId={selectedProjectId}
-          plugins={plugins}
-          skills={skills}
-          mcpStatus={mcpStatus}
-          loading={loadingInspector}
-          onRefresh={() => {
-            void refreshInspector(selectedProjectId);
-          }}
-          onTogglePlugin={(pluginId, enabled) => {
-            void handleTogglePlugin(pluginId, enabled);
-          }}
-          onToggleSkill={(skillId, enabled) => {
-            void handleToggleSkill(skillId, enabled);
-          }}
-          onDecideMcpApproval={(approvalId, decision) => {
-            void handleDecideMcpApproval(approvalId, decision);
-          }}
-        />
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center gap-1 rounded-[6px] border border-border-subtle bg-inset p-1">
+            <button
+              type="button"
+              onClick={() => setInspectorTab('plugins')}
+              className={`orch-transition flex-1 rounded-[4px] px-2 py-1 text-[11.5px] font-medium ${
+                inspectorTab === 'plugins'
+                  ? 'bg-surface text-ink'
+                  : 'text-ink-secondary hover:text-ink'
+              }`}
+            >
+              {dict.pluginsTab}
+            </button>
+            <button
+              type="button"
+              onClick={() => setInspectorTab('memory')}
+              className={`orch-transition flex-1 rounded-[4px] px-2 py-1 text-[11.5px] font-medium ${
+                inspectorTab === 'memory'
+                  ? 'bg-surface text-ink'
+                  : 'text-ink-secondary hover:text-ink'
+              }`}
+            >
+              {dict.memoryTab}
+            </button>
+          </div>
+
+          {inspectorTab === 'plugins' ? (
+            <PluginsDrawer
+              projectId={selectedProjectId}
+              plugins={plugins}
+              skills={skills}
+              mcpStatus={mcpStatus}
+              loading={loadingInspector}
+              onRefresh={() => {
+                void refreshInspector(selectedProjectId);
+              }}
+              onTogglePlugin={(pluginId, enabled) => {
+                void handleTogglePlugin(pluginId, enabled);
+              }}
+              onToggleSkill={(skillId, enabled) => {
+                void handleToggleSkill(skillId, enabled);
+              }}
+              onDecideMcpApproval={(approvalId, decision) => {
+                void handleDecideMcpApproval(approvalId, decision);
+              }}
+            />
+          ) : (
+            <ProjectMemoryPanel
+              projectId={selectedProjectId}
+              entries={memoryEntries}
+              promptPreview={memoryPromptPreview}
+              maxChars={memoryMaxChars}
+              errorMessage={memoryError}
+              statusMessage={memoryStatus}
+              onUpsert={handleUpsertMemory}
+              onDelete={handleDeleteMemory}
+              onSyncDoc={handleSyncMemoryDoc}
+              onImportDoc={handleImportMemoryDoc}
+            />
+          )}
+        </div>
       }
       radarSlot={
         <UsageQuotaRadar
@@ -966,6 +1114,33 @@ function WorkbenchApp() {
       {bridgeError ? (
         <div className="mb-4 rounded-[6px] bg-warn-bg px-3 py-2 text-[12px] text-warn">
           {bridgeError}
+        </div>
+      ) : null}
+
+      {memoryProposal ? (
+        <div className="surface-card pixel-frame mb-4 flex items-center justify-between gap-3 px-3 py-2 text-[12px]">
+          <div className="min-w-0">
+            <div className="font-medium text-ink">{dict.memoryProposalTitle}</div>
+            <div className="truncate text-[11.5px] text-ink-secondary">
+              {memoryProposal.title} — {memoryProposal.content}
+            </div>
+          </div>
+          <div className="flex shrink-0 items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => void handleAcceptMemoryProposal()}
+              className="rounded-[4px] bg-accent px-2.5 py-1 text-[11px] font-medium text-surface"
+            >
+              {dict.saveMemory}
+            </button>
+            <button
+              type="button"
+              onClick={() => setMemoryProposal(null)}
+              className="rounded-[4px] border border-border-subtle bg-inset px-2 py-1 text-[11px] text-ink-secondary"
+            >
+              {dict.dismiss}
+            </button>
+          </div>
         </div>
       ) : null}
 

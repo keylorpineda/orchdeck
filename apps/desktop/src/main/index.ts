@@ -746,6 +746,94 @@ function registerIpcHandlers(): void {
     }
     return supervisor.getClient().call('mcp.decideApproval', { approvalId, decision });
   });
+
+  ipcMain.handle('orchdeck:memory-list', async (_event, projectId: unknown) => {
+    if (typeof projectId !== 'string' || projectId.length === 0) {
+      throw new Error('Invalid projectId for orchdeck:memory-list.');
+    }
+    return supervisor.getClient().call('memory.list', { projectId });
+  });
+
+  ipcMain.handle('orchdeck:memory-upsert', async (_event, rawParams: unknown) => {
+    const params = asObject(rawParams, 'orchdeck:memory-upsert');
+    const projectId = params['projectId'];
+    const id = params['id'];
+    const category = params['category'];
+    const title = params['title'];
+    const content = params['content'];
+    if (
+      typeof projectId !== 'string' ||
+      projectId.length === 0 ||
+      (id !== undefined && typeof id !== 'string') ||
+      (category !== 'decision' && category !== 'convention' && category !== 'open_item') ||
+      typeof title !== 'string' ||
+      typeof content !== 'string'
+    ) {
+      throw new Error('Invalid params for orchdeck:memory-upsert.');
+    }
+    return supervisor.getClient().call('memory.upsert', {
+      projectId,
+      id,
+      category,
+      title,
+      content,
+    });
+  });
+
+  ipcMain.handle('orchdeck:memory-delete', async (_event, id: unknown) => {
+    if (typeof id !== 'string' || id.length === 0) {
+      throw new Error('Invalid id for orchdeck:memory-delete.');
+    }
+    return supervisor.getClient().call('memory.delete', { id });
+  });
+
+  ipcMain.handle('orchdeck:memory-propose-from-change', async (_event, rawParams: unknown) => {
+    const params = asObject(rawParams, 'orchdeck:memory-propose-from-change');
+    const projectId = params['projectId'];
+    const chatId = params['chatId'];
+    const commitMessage = params['commitMessage'];
+    if (
+      typeof projectId !== 'string' ||
+      projectId.length === 0 ||
+      (chatId !== undefined && typeof chatId !== 'string') ||
+      typeof commitMessage !== 'string'
+    ) {
+      throw new Error('Invalid params for orchdeck:memory-propose-from-change.');
+    }
+    return supervisor.getClient().call('memory.proposeFromChange', {
+      projectId,
+      chatId,
+      commitMessage,
+    });
+  });
+
+  ipcMain.handle('orchdeck:memory-sync-doc', async (_event, rawParams: unknown) => {
+    const params = asObject(rawParams, 'orchdeck:memory-sync-doc');
+    const projectId = params['projectId'];
+    const target = params['target'];
+    if (
+      typeof projectId !== 'string' ||
+      projectId.length === 0 ||
+      (target !== 'AGENTS.md' && target !== 'CLAUDE.md')
+    ) {
+      throw new Error('Invalid params for orchdeck:memory-sync-doc.');
+    }
+    return supervisor.getClient().call('memory.syncDoc', { projectId, target });
+  });
+
+  ipcMain.handle('orchdeck:memory-import-doc', async (_event, rawParams: unknown) => {
+    const params = asObject(rawParams, 'orchdeck:memory-import-doc');
+    const projectId = params['projectId'];
+    const target = params['target'];
+    if (
+      typeof projectId !== 'string' ||
+      projectId.length === 0 ||
+      (target !== 'AGENTS.md' && target !== 'CLAUDE.md')
+    ) {
+      throw new Error('Invalid params for orchdeck:memory-import-doc.');
+    }
+    return supervisor.getClient().call('memory.importDoc', { projectId, target });
+  });
 }
 
 function configureSecurityHeaders(): void {

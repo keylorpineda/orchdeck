@@ -98,4 +98,22 @@ export const INITIAL_MIGRATIONS: readonly Migration[] = [
       ALTER TABLE chats ADD COLUMN worktree_branch TEXT;
     `,
   },
+  {
+    version: 5,
+    name: 'shared_project_memory',
+    sql: `
+      CREATE TABLE IF NOT EXISTS project_memory (
+        id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        category TEXT NOT NULL,
+        title TEXT NOT NULL,
+        content TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_project_memory_project_cat
+        ON project_memory(project_id, category, updated_at DESC);
+    `,
+  },
 ];

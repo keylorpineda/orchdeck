@@ -11,6 +11,20 @@ import type {
   RecipeRunUpdatedNotificationParams,
 } from './fusion.js';
 import type {
+  MemoryDeleteParams,
+  MemoryDeleteResult,
+  MemoryImportDocParams,
+  MemoryImportDocResult,
+  MemoryListParams,
+  MemoryListResult,
+  MemoryProposeFromChangeParams,
+  MemoryProposeFromChangeResult,
+  MemorySyncDocParams,
+  MemorySyncDocResult,
+  MemoryUpsertParams,
+  MemoryUpsertResult,
+} from './memory.js';
+import type {
   McpApprovalRequiredNotificationParams,
   McpDecideApprovalParams,
   McpDecideApprovalResult,
@@ -732,6 +746,30 @@ export interface DaemonMethodMap {
   'mcp.decideApproval': {
     params: McpDecideApprovalParams;
     result: McpDecideApprovalResult;
+  };
+  'memory.list': {
+    params: MemoryListParams;
+    result: MemoryListResult;
+  };
+  'memory.upsert': {
+    params: MemoryUpsertParams;
+    result: MemoryUpsertResult;
+  };
+  'memory.delete': {
+    params: MemoryDeleteParams;
+    result: MemoryDeleteResult;
+  };
+  'memory.proposeFromChange': {
+    params: MemoryProposeFromChangeParams;
+    result: MemoryProposeFromChangeResult;
+  };
+  'memory.syncDoc': {
+    params: MemorySyncDocParams;
+    result: MemorySyncDocResult;
+  };
+  'memory.importDoc': {
+    params: MemoryImportDocParams;
+    result: MemoryImportDocResult;
   };
 }
 

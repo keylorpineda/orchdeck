@@ -88,6 +88,16 @@ export {
   type LocalMcpHubOptions,
   type McpToolDefinition,
 } from './mcp/local-mcp-hub.js';
+export {
+  DEFAULT_MEMORY_CHAR_BUDGET,
+  MEMORY_BLOCK_END,
+  MEMORY_BLOCK_START,
+  assertNoSecretsInMemory,
+  buildBudgetedMemoryInjection,
+  importMemoryFromRepoDoc,
+  proposeMemoryFromChangeCard,
+  syncMemoryToRepoDoc,
+} from './memory/project-memory.js';
 export { PluginInspector, type PluginInspectorOptions } from './plugins/plugin-inspector.js';
 export {
   ProviderCooldownTracker,
