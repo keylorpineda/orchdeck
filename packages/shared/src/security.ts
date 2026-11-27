@@ -9,3 +9,5 @@ export const DEFAULT_BLOCKED_BILLING_KEYS: readonly string[] = [
   'CLAUDE_API_KEY',
   'CODEX_API_KEY',
 ];
+
+export const CO_AUTHOR_TRAILER_REGEX = /^\s*co-authored-by\s*:/im;

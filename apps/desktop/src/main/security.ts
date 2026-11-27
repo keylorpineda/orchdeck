@@ -1,11 +1,6 @@
-export const STRIPPED_BILLING_ENV_KEYS: readonly string[] = [
-  'ANTHROPIC_API_KEY',
-  'OPENAI_API_KEY',
-  'GEMINI_API_KEY',
-  'GOOGLE_API_KEY',
-  'AZURE_OPENAI_API_KEY',
-  'AWS_SECRET_ACCESS_KEY',
-];
+import { DEFAULT_BLOCKED_BILLING_KEYS } from '@orchdeck/shared';
+
+export const STRIPPED_BILLING_ENV_KEYS: readonly string[] = DEFAULT_BLOCKED_BILLING_KEYS;
 
 export const PRODUCTION_CSP = [
   "default-src 'self'",
@@ -53,11 +48,13 @@ export function sanitizeDaemonEnv(
   baseEnv: NodeJS.ProcessEnv,
   extraBlockedKeys: readonly string[] = [],
 ): NodeJS.ProcessEnv {
-  const blocked = new Set([...STRIPPED_BILLING_ENV_KEYS, ...extraBlockedKeys]);
+  const blocked = new Set(
+    [...STRIPPED_BILLING_ENV_KEYS, ...extraBlockedKeys].map((k) => k.toUpperCase()),
+  );
   const sanitized: NodeJS.ProcessEnv = {};
 
   for (const [key, value] of Object.entries(baseEnv)) {
-    if (value === undefined || blocked.has(key)) {
+    if (value === undefined || blocked.has(key.toUpperCase())) {
       continue;
     }
     sanitized[key] = value;

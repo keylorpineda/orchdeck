@@ -64,4 +64,4 @@ export {
 } from './rpc.js';
 
 export { redactSecrets } from './secret-redactor.js';
-export { DEFAULT_BLOCKED_BILLING_KEYS } from './security.js';
+export { CO_AUTHOR_TRAILER_REGEX, DEFAULT_BLOCKED_BILLING_KEYS } from './security.js';
