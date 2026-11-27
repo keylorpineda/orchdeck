@@ -1,0 +1,132 @@
+name: Release Packaging
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: Release update channel
+        required: true
+        default: stable
+        type: choice
+        options:
+          - stable
+          - dev
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    name: Verify Release Candidate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies with pnpm
+        run: pnpm install --frozen-lockfile
+
+      - name: Run full verification suite
+        run: |
+          pnpm run lint
+          pnpm run security:check
+          pnpm run build
+          pnpm run typecheck
+          pnpm run test
+          pnpm run release:dry-run
+          pnpm run verify:sdk
+
+  package-windows:
+    name: Package Windows Installer
+    needs: verify
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies with pnpm
+        run: pnpm install --frozen-lockfile
+
+      - name: Build and verify Windows release dry-run
+        run: |
+          pnpm run build
+          pnpm run release:dry-run
+
+      - name: Build signed Windows installer when certificate is configured
+        if: env.WIN_CSC_LINK != ''
+        env:
+          CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+        run: pnpm --filter @orchdeck/desktop exec electron-builder --config packaging/electron-builder.json --win --publish never
+
+      - name: Upload Windows installer artifacts
+        if: env.WIN_CSC_LINK != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: orchdeck-windows-installer
+          path: apps/desktop/release/*.exe
+
+  package-macos:
+    name: Package macOS Installer
+    needs: verify
+    runs-on: macos-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies with pnpm
+        run: pnpm install --frozen-lockfile
+
+      - name: Build and verify macOS release dry-run
+        run: |
+          pnpm run build
+          pnpm run release:dry-run
+
+      - name: Build signed and notarized macOS bundles when certificate is configured
+        if: env.APPLE_ID != ''
+        env:
+          CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: pnpm --filter @orchdeck/desktop exec electron-builder --config packaging/electron-builder.json --mac --publish never
+
+      - name: Upload macOS installer artifacts
+        if: env.APPLE_ID != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: orchdeck-macos-installer
+          path: |
+            apps/desktop/release/*.dmg
+            apps/desktop/release/*.zip

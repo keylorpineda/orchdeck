@@ -134,7 +134,7 @@ Every Pull Request must:
 
 ## 6. Engineering, Design System, and Security Rules
 
-1. **Test without burning subscriptions:** all CI suites and adapter contract tests must run against `MockAdapter` and recorded fixtures—never depend on live CLI credentials in GitHub Actions.
+1. **Test without burning subscriptions:** all CI suites and adapter contract tests must run against `MockAdapter` and recorded fixtures—never depend on live CLI credentials in GitHub Actions. Follow [ADAPTER_SDK.md](docs/ADAPTER_SDK.md) when implementing a new CLI engine adapter.
 2. **Git operations via system CLI:** all repository actions in the Core Daemon must invoke the system `git` binary through `GitService`. Do not add `libgit2`-style write bindings.
 3. **Design System compliance:** follow tokens and anti-AI-slop rules in [DESIGN_SYSTEM.md](docs/DESIGN_SYSTEM.md). Avoid raw Tailwind palette classes (`indigo-*`, `purple-*`, `slate-*`).
 4. **Security and sensitive-data invariants:** follow [SECURITY.md](SECURITY.md) and [SECURITY_ARCHITECTURE.md](docs/SECURITY_ARCHITECTURE.md). Preserve API key stripping (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, `GOOGLE_API_KEY`), `SecretRedactor` redaction, Electron sandboxing, and hard `main` branch protection. Never commit `.env` files, private keys, tokens, or local databases; run `pnpm run security:check` before opening a PR.
