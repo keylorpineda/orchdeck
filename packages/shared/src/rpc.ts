@@ -11,6 +11,19 @@ import type {
   RecipeRunUpdatedNotificationParams,
 } from './fusion.js';
 import type {
+  McpApprovalRequiredNotificationParams,
+  McpDecideApprovalParams,
+  McpDecideApprovalResult,
+  McpStatusParams,
+  McpStatusResult,
+  PluginsInspectParams,
+  PluginsInspectResult,
+  PluginsToggleParams,
+  PluginsToggleResult,
+  SkillsToggleParams,
+  SkillsToggleResult,
+} from './plugins-mcp.js';
+import type {
   SecondOpinionRecord,
   SecondOpinionResolution,
   SecondOpinionUpdatedNotificationParams,
@@ -700,6 +713,26 @@ export interface DaemonMethodMap {
     params: WorktreesPruneParams;
     result: WorktreesPruneResult;
   };
+  'plugins.inspect': {
+    params: PluginsInspectParams;
+    result: PluginsInspectResult;
+  };
+  'plugins.toggle': {
+    params: PluginsToggleParams;
+    result: PluginsToggleResult;
+  };
+  'skills.toggle': {
+    params: SkillsToggleParams;
+    result: SkillsToggleResult;
+  };
+  'mcp.status': {
+    params: McpStatusParams;
+    result: McpStatusResult;
+  };
+  'mcp.decideApproval': {
+    params: McpDecideApprovalParams;
+    result: McpDecideApprovalResult;
+  };
 }
 
 export type DaemonMethod = keyof DaemonMethodMap;
@@ -709,6 +742,7 @@ export interface DaemonNotificationMap {
   'taskRun.updated': TaskRunUpdatedNotificationParams;
   'recipeRun.updated': RecipeRunUpdatedNotificationParams;
   'secondOpinion.updated': SecondOpinionUpdatedNotificationParams;
+  'mcp.approvalRequired': McpApprovalRequiredNotificationParams;
 }
 
 export type DaemonNotificationMethod = keyof DaemonNotificationMap;

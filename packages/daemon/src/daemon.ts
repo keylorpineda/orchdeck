@@ -12,6 +12,8 @@ import { GitService } from './git/git-service.js';
 import { WorktreeManager } from './git/worktree-manager.js';
 import { DaemonRpcServer } from './ipc/server.js';
 import { resolveDefaultDataDir, resolveSocketPath } from './ipc/socket-path.js';
+import { LocalMcpHub } from './mcp/local-mcp-hub.js';
+import { PluginInspector } from './plugins/plugin-inspector.js';
 import { ProviderCooldownTracker } from './usage/quota-radar.js';
 
 export interface StartDaemonOptions {
@@ -40,13 +42,32 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Run
   const db = new DaemonDatabase(dbPath);
   const registry = new AdapterRegistry(options.adapters ?? createDefaultMockAdapters());
   const gitService = options.gitService ?? new GitService();
+  const pluginInspector = new PluginInspector({ db });
 
   let server: DaemonRpcServer | null = null;
+  const mcpHub = new LocalMcpHub({
+    onApprovalRequired: (approval) => {
+      server?.broadcastNotification('mcp.approvalRequired', { approval });
+    },
+  });
+
   const turnRunner = new TurnRunner({
     registry,
     db,
     emitEvent: (notification) => {
       server?.broadcastNotification('turn.event', notification);
+    },
+    contextBuilder: (cwd) => {
+      const matchedProject = db
+        .listProjects()
+        .find((proj) => cwd === proj.rootPath || cwd.startsWith(proj.rootPath));
+      if (!matchedProject) {
+        return '';
+      }
+      return pluginInspector.buildSkillInjectionPrompt({
+        projectId: matchedProject.id,
+        repoPath: matchedProject.rootPath,
+      });
     },
   });
 
@@ -88,13 +109,17 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Run
     recipeOrchestrator,
     secondOpinionOrchestrator,
     cooldownTracker,
+    pluginInspector,
+    mcpHub,
     worktreeManager,
     gitService,
   });
 
   try {
+    await mcpHub.start();
     await server.start();
   } catch (err) {
+    await mcpHub.close();
     db.close();
     throw err;
   }
@@ -110,6 +135,7 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Run
       recipeOrchestrator.dispose();
       taskRunOrchestrator.dispose();
       await server.stop();
+      await mcpHub.close();
       db.close();
     },
   };

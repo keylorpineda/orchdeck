@@ -82,6 +82,14 @@ export {
   type CreatedWorktreeResult,
 } from './git/worktree-manager.js';
 export {
+  LocalMcpHub,
+  deduplicateMcpServersForProvider,
+  isMutatingMcpTool,
+  type LocalMcpHubOptions,
+  type McpToolDefinition,
+} from './mcp/local-mcp-hub.js';
+export { PluginInspector, type PluginInspectorOptions } from './plugins/plugin-inspector.js';
+export {
   ProviderCooldownTracker,
   buildUsageSummaryWithRadar,
   computeEmpiricalCalibration,

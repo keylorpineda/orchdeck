@@ -22,9 +22,18 @@ import type {
   HandoffRelayResult,
   KvGetResult,
   KvSetResult,
+  McpApprovalRequiredNotificationParams,
+  McpDecideApprovalParams,
+  McpDecideApprovalResult,
+  McpStatusParams,
+  McpStatusResult,
   MessagesAppendParams,
   MessagesAppendResult,
   MessagesListResult,
+  PluginsInspectParams,
+  PluginsInspectResult,
+  PluginsToggleParams,
+  PluginsToggleResult,
   ProjectsCreateParams,
   ProjectsCreateResult,
   ProjectsDeleteResult,
@@ -46,6 +55,8 @@ import type {
   SecondOpinionStartParams,
   SecondOpinionStartResult,
   SecondOpinionUpdatedNotificationParams,
+  SkillsToggleParams,
+  SkillsToggleResult,
   TaskRunActionResult,
   TaskRunStartParams,
   TaskRunStartResult,
@@ -109,6 +120,12 @@ interface OrchdeckBridge {
   listWorktrees(projectId: string): Promise<WorktreesListResult>;
   removeWorktree(params: WorktreesRemoveParams): Promise<WorktreesRemoveResult>;
   pruneWorktrees(projectId: string): Promise<WorktreesPruneResult>;
+  inspectPlugins(params?: PluginsInspectParams): Promise<PluginsInspectResult>;
+  togglePlugin(params: PluginsToggleParams): Promise<PluginsToggleResult>;
+  toggleSkill(params: SkillsToggleParams): Promise<SkillsToggleResult>;
+  getMcpStatus(params?: McpStatusParams): Promise<McpStatusResult>;
+  decideMcpApproval(params: McpDecideApprovalParams): Promise<McpDecideApprovalResult>;
+  onMcpApprovalRequired(listener: (event: McpApprovalRequiredNotificationParams) => void): () => void;
   onTurnEvent(listener: (event: TurnEventNotificationParams) => void): () => void;
   onTaskRunUpdated(listener: (event: TaskRunUpdatedNotificationParams) => void): () => void;
   onRecipeRunUpdated(listener: (event: RecipeRunUpdatedNotificationParams) => void): () => void;
@@ -194,6 +211,31 @@ const bridge: OrchdeckBridge = {
     ipcRenderer.invoke('orchdeck:worktrees-remove', params) as Promise<WorktreesRemoveResult>,
   pruneWorktrees: (projectId: string) =>
     ipcRenderer.invoke('orchdeck:worktrees-prune', projectId) as Promise<WorktreesPruneResult>,
+  inspectPlugins: (params?: PluginsInspectParams) =>
+    ipcRenderer.invoke('orchdeck:plugins-inspect', params ?? {}) as Promise<PluginsInspectResult>,
+  togglePlugin: (params: PluginsToggleParams) =>
+    ipcRenderer.invoke('orchdeck:plugins-toggle', params) as Promise<PluginsToggleResult>,
+  toggleSkill: (params: SkillsToggleParams) =>
+    ipcRenderer.invoke('orchdeck:skills-toggle', params) as Promise<SkillsToggleResult>,
+  getMcpStatus: (params?: McpStatusParams) =>
+    ipcRenderer.invoke('orchdeck:mcp-status', params ?? {}) as Promise<McpStatusResult>,
+  decideMcpApproval: (params: McpDecideApprovalParams) =>
+    ipcRenderer.invoke(
+      'orchdeck:mcp-decide-approval',
+      params,
+    ) as Promise<McpDecideApprovalResult>,
+  onMcpApprovalRequired: (listener: (event: McpApprovalRequiredNotificationParams) => void) => {
+    const handler = (
+      _ipcEvent: IpcRendererEvent,
+      payload: McpApprovalRequiredNotificationParams,
+    ): void => {
+      listener(payload);
+    };
+    ipcRenderer.on('orchdeck:mcp-approval-required', handler);
+    return () => {
+      ipcRenderer.off('orchdeck:mcp-approval-required', handler);
+    };
+  },
   onTurnEvent: (listener: (event: TurnEventNotificationParams) => void) => {
     const handler = (_ipcEvent: IpcRendererEvent, payload: TurnEventNotificationParams): void => {
       listener(payload);

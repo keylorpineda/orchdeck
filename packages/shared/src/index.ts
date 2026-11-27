@@ -169,3 +169,24 @@ export type {
 
 export { redactSecrets } from './secret-redactor.js';
 export { CO_AUTHOR_TRAILER_REGEX, DEFAULT_BLOCKED_BILLING_KEYS } from './security.js';
+export type {
+  DiscoveredPlugin,
+  DiscoveredSkill,
+  McpApprovalRequiredNotificationParams,
+  McpDecideApprovalParams,
+  McpDecideApprovalResult,
+  McpHubStatus,
+  McpPendingApproval,
+  McpServerDescriptor,
+  McpStatusParams,
+  McpStatusResult,
+  PluginConfigScope,
+  PluginProviderScope,
+  PluginsInspectParams,
+  PluginsInspectResult,
+  PluginsToggleParams,
+  PluginsToggleResult,
+  PluginToggleMode,
+  SkillsToggleParams,
+  SkillsToggleResult,
+} from './plugins-mcp.js';

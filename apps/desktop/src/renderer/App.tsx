@@ -5,6 +5,10 @@ import {
   type ApprovalMode,
   type ChangeCardSnapshot,
   type ChatRecord,
+  type DiscoveredPlugin,
+  type DiscoveredSkill,
+  type McpApprovalRequiredNotificationParams,
+  type McpHubStatus,
   type MessageRecord,
   type ProjectWithGitStatus,
   type RecipeCreateParams,
@@ -22,6 +26,7 @@ import {
 } from '@orchdeck/shared';
 import { ChatWorkspace, type MessageTurnMeta } from './components/ChatWorkspace';
 import { LanguageProvider } from './components/LanguageProvider';
+import { PluginsDrawer } from './components/PluginsDrawer';
 import { ProjectSidebar } from './components/ProjectSidebar';
 import { ThemeProvider } from './components/ThemeProvider';
 import { UsageQuotaRadar } from './components/UsageQuotaRadar';
@@ -74,6 +79,10 @@ function WorkbenchApp() {
   const [usageSummary, setUsageSummary] = useState<UsageSummaryResult | null>(null);
   const [includeLocalLogs, setIncludeLocalLogs] = useState(false);
   const [loadingUsage, setLoadingUsage] = useState(false);
+  const [plugins, setPlugins] = useState<readonly DiscoveredPlugin[]>([]);
+  const [skills, setSkills] = useState<readonly DiscoveredSkill[]>([]);
+  const [mcpStatus, setMcpStatus] = useState<McpHubStatus | null>(null);
+  const [loadingInspector, setLoadingInspector] = useState(false);
   const [changeError, setChangeError] = useState<string | null>(null);
   const [changeNotice, setChangeNotice] = useState<string | null>(null);
 
@@ -98,6 +107,25 @@ function WorkbenchApp() {
     },
     [includeLocalLogs],
   );
+
+  const refreshInspector = useCallback(async (projectId: string | null): Promise<void> => {
+    const api = window.orchdeck;
+    if (!api) {
+      return;
+    }
+    setLoadingInspector(true);
+    try {
+      const [inspected, mcpRes] = await Promise.all([
+        api.inspectPlugins(projectId ? { projectId } : {}),
+        api.getMcpStatus(projectId ? { projectId } : {}),
+      ]);
+      setPlugins(inspected.plugins);
+      setSkills(inspected.skills);
+      setMcpStatus(mcpRes.status);
+    } finally {
+      setLoadingInspector(false);
+    }
+  }, []);
 
   const refreshChangeCard = useCallback(
     async (projectId: string | null, chatId?: string | null): Promise<void> => {
@@ -187,6 +215,10 @@ function WorkbenchApp() {
   useEffect(() => {
     void loadInitialWorkspace();
   }, [loadInitialWorkspace]);
+
+  useEffect(() => {
+    void refreshInspector(selectedProjectId);
+  }, [refreshInspector, selectedProjectId]);
 
   useEffect(() => {
     const api = window.orchdeck;
@@ -300,13 +332,26 @@ function WorkbenchApp() {
       },
     );
 
+    const unsubMcpApproval = api.onMcpApprovalRequired(
+      (_payload: McpApprovalRequiredNotificationParams) => {
+        void refreshInspector(selectedProjectId);
+      },
+    );
+
     return () => {
       unsubTurn();
       unsubTaskRun();
       unsubRecipeRun();
       unsubSecondOpinion();
+      unsubMcpApproval();
     };
-  }, [refreshChangeCard, refreshChatsForProject, refreshUsageSummary, selectedProjectId]);
+  }, [
+    refreshChangeCard,
+    refreshChatsForProject,
+    refreshInspector,
+    refreshUsageSummary,
+    selectedProjectId,
+  ]);
 
   const handleSelectProject = (projectId: string): void => {
     setSelectedProjectId(projectId);
@@ -826,6 +871,36 @@ function WorkbenchApp() {
     }
   };
 
+  const handleTogglePlugin = async (pluginId: string, enabled: boolean): Promise<void> => {
+    const api = window.orchdeck;
+    if (!api || !selectedProjectId) {
+      return;
+    }
+    await api.togglePlugin({ projectId: selectedProjectId, pluginId, enabled });
+    await refreshInspector(selectedProjectId);
+  };
+
+  const handleToggleSkill = async (skillId: string, enabled: boolean): Promise<void> => {
+    const api = window.orchdeck;
+    if (!api || !selectedProjectId) {
+      return;
+    }
+    await api.toggleSkill({ projectId: selectedProjectId, skillId, enabled });
+    await refreshInspector(selectedProjectId);
+  };
+
+  const handleDecideMcpApproval = async (
+    approvalId: string,
+    decision: 'approve' | 'deny',
+  ): Promise<void> => {
+    const api = window.orchdeck;
+    if (!api) {
+      return;
+    }
+    await api.decideMcpApproval({ approvalId, decision });
+    await refreshInspector(selectedProjectId);
+  };
+
   const activeProject = projects.find((p) => p.id === selectedProjectId) ?? null;
   const activeChats = activeProject ? (chatsByProject[activeProject.id] ?? []) : [];
   const activeChat = activeChats.find((c) => c.id === selectedChatId) ?? null;
@@ -834,6 +909,27 @@ function WorkbenchApp() {
     <WorkbenchShell
       projectName={activeProject?.name}
       branchName={activeChat?.worktreeBranch ?? activeProject?.currentBranch ?? undefined}
+      drawerContent={
+        <PluginsDrawer
+          projectId={selectedProjectId}
+          plugins={plugins}
+          skills={skills}
+          mcpStatus={mcpStatus}
+          loading={loadingInspector}
+          onRefresh={() => {
+            void refreshInspector(selectedProjectId);
+          }}
+          onTogglePlugin={(pluginId, enabled) => {
+            void handleTogglePlugin(pluginId, enabled);
+          }}
+          onToggleSkill={(skillId, enabled) => {
+            void handleToggleSkill(skillId, enabled);
+          }}
+          onDecideMcpApproval={(approvalId, decision) => {
+            void handleDecideMcpApproval(approvalId, decision);
+          }}
+        />
+      }
       radarSlot={
         <UsageQuotaRadar
           summary={usageSummary}
