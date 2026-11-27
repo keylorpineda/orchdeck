@@ -44,3 +44,8 @@ jobs:
 
       - name: Run workspace tests
         run: pnpm run test
+
+      - name: Run release dry-run and Adapter SDK checks
+        run: |
+          pnpm run release:dry-run
+          pnpm run verify:sdk

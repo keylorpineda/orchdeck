@@ -22,7 +22,9 @@
     "security:check": "pnpm run security:secrets && pnpm run security:audit",
     "typecheck": "tsc --noEmit && pnpm -r --if-present typecheck",
     "test": "pnpm -r --if-present test",
-    "build": "pnpm -r --if-present build"
+    "build": "pnpm -r --if-present build",
+    "release:dry-run": "node scripts/release-dry-run.ts",
+    "verify:sdk": "node scripts/verify-adapter-sdk.ts"
   },
   "devDependencies": {
     "@commitlint/cli": "^21.2.4",
