@@ -2,6 +2,8 @@
   "appId": "com.orchdeck.desktop",
   "productName": "Orchdeck",
   "copyright": "Copyright (c) 2026 Orchdeck Contributors",
+  "asar": true,
+  "compression": "maximum",
   "directories": {
     "output": "release",
     "buildResources": "packaging"

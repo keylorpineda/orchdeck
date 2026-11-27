@@ -1,10 +1,32 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
-import { createHighlighterCore, type HighlighterCore, type ThemedToken, type ThemeRegistration } from 'shiki/core';
+import {
+  createHighlighterCore,
+  type HighlighterCore,
+  type LanguageInput,
+  type ThemedToken,
+  type ThemeRegistration,
+} from 'shiki/core';
 import { createJavaScriptRegexEngine } from 'shiki/engine/javascript';
-import { bundledLanguages, type BundledLanguage } from 'shiki/langs';
 import { detectShikiLang, parseDiffLines } from '../state/change-card-utils';
 import type { InlineDiffComment } from '../state/inline-comments';
 import { useTheme } from './ThemeProvider';
+
+const SUPPORTED_LANG_LOADERS: Readonly<Record<string, () => Promise<{ default: LanguageInput } | LanguageInput>>> = {
+  typescript: () => import('shiki/langs/typescript.mjs'),
+  tsx: () => import('shiki/langs/tsx.mjs'),
+  javascript: () => import('shiki/langs/javascript.mjs'),
+  jsx: () => import('shiki/langs/jsx.mjs'),
+  json: () => import('shiki/langs/json.mjs'),
+  css: () => import('shiki/langs/css.mjs'),
+  html: () => import('shiki/langs/html.mjs'),
+  markdown: () => import('shiki/langs/markdown.mjs'),
+  yaml: () => import('shiki/langs/yaml.mjs'),
+  bash: () => import('shiki/langs/bash.mjs'),
+  python: () => import('shiki/langs/python.mjs'),
+  rust: () => import('shiki/langs/rust.mjs'),
+  go: () => import('shiki/langs/go.mjs'),
+  sql: () => import('shiki/langs/sql.mjs'),
+};
 
 const PAPER_INK_THEME: ThemeRegistration = {
   name: 'orchdeck-paper-ink',
@@ -53,9 +75,10 @@ async function getDiffHighlighter(lang: string): Promise<HighlighterCore> {
   }
 
   const highlighter = await highlighterPromise;
-  if (lang !== 'text' && !loadedLanguages.has(lang) && lang in bundledLanguages) {
-    const loader = bundledLanguages[lang as BundledLanguage];
-    await highlighter.loadLanguage(loader);
+  const loader = SUPPORTED_LANG_LOADERS[lang];
+  if (lang !== 'text' && !loadedLanguages.has(lang) && loader) {
+    const mod = await loader();
+    await highlighter.loadLanguage('default' in mod ? mod.default : mod);
     loadedLanguages.add(lang);
   }
   return highlighter;
@@ -102,7 +125,7 @@ export function ShikiDiffView({
   );
 
   useEffect(() => {
-    if (isBinary || codeEntries.length === 0 || lang === 'text' || !(lang in bundledLanguages)) {
+    if (isBinary || codeEntries.length === 0 || lang === 'text' || !(lang in SUPPORTED_LANG_LOADERS)) {
       setTokenLines(null);
       return;
     }
