@@ -1,0 +1,32 @@
+name: Solicitud de Funcionalidad
+description: Propón una mejora alineada con el enfoque de Pauta (sin convertirla en un IDE).
+title: "[Feat]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Qué problema resuelve
+      description: Describe el flujo diario que hoy genera fricción.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Propuesta concreta
+      description: Cómo debería comportarse sin complicar la interfaz ni comprometer el control humano de git.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Área principal
+      options:
+        - UI / Tarjetas de Cambios
+        - Fusión de Modelos / Recetas
+        - Modos de Aprobación / Seguridad
+        - Plugins / Skills / MCP
+        - Uso y Cuotas
+        - Git Worktrees / Memoria
+    validations:
+      required: true

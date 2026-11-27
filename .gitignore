@@ -1,0 +1,26 @@
+# Dependencias y builds
+node_modules/
+dist/
+out/
+release/
+.vite/
+
+# Base de datos SQLite local
+*.db
+*.db-wal
+*.db-shm
+
+# Entorno y secretos
+.env
+.env.*
+
+# Estado interno del orquestador (también excluido vía .git/info/exclude en repos objetivo)
+.pauta/
+
+# Logs
+*.log
+
+# Sistema y editores
+.DS_Store
+Thumbs.db
+.vscode/
