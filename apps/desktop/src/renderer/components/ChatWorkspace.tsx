@@ -5,18 +5,22 @@ import type {
   ChatRecord,
   MessageRecord,
   ProjectWithGitStatus,
+  TaskRunRecord,
   TestRunResult,
 } from '@orchdeck/shared';
+import type { V01ApprovalMode } from '../state/approval-mode';
 import {
   formatModelLabel,
   type ModelOption,
   type StreamingTurnState,
   type ToolActivityEntry,
 } from '../state/turn-stream';
+import { ApprovalModePicker } from './ApprovalModePicker';
 import { ChangeCard } from './ChangeCard';
 import { EngineMark } from './EngineMark';
 import { MarkdownContent } from './MarkdownContent';
 import { ModelPicker } from './ModelPicker';
+import { PlanApprovalCard } from './PlanApprovalCard';
 import { ToolActivityBlock } from './ToolActivityBlock';
 
 export interface MessageTurnMeta {
@@ -34,6 +38,9 @@ export interface ChatWorkspaceProps {
   readonly modelOptions: readonly ModelOption[];
   readonly chatModelHandle: string;
   readonly turnOverrideHandle: string | null;
+  readonly approvalMode: V01ApprovalMode;
+  readonly activeTaskRun: TaskRunRecord | null;
+  readonly planActionBusy: boolean;
   readonly changeSnapshot: ChangeCardSnapshot | null;
   readonly testResult: TestRunResult | null;
   readonly loadingChanges: boolean;
@@ -44,6 +51,9 @@ export interface ChatWorkspaceProps {
   readonly changeNotice: string | null;
   readonly onChangeChatModel: (handle: string) => void;
   readonly onChangeTurnOverride: (handle: string | null) => void;
+  readonly onChangeApprovalMode: (mode: V01ApprovalMode) => void;
+  readonly onApprovePlan: (taskRunId: string) => Promise<void>;
+  readonly onRejectPlan: (taskRunId: string) => Promise<void>;
   readonly onSendPrompt: (prompt: string) => Promise<void>;
   readonly onCancelTurn: (turnId: string) => Promise<void>;
   readonly onCreateChat: (projectId: string) => Promise<void>;
@@ -62,6 +72,9 @@ export function ChatWorkspace({
   modelOptions,
   chatModelHandle,
   turnOverrideHandle,
+  approvalMode,
+  activeTaskRun,
+  planActionBusy,
   changeSnapshot,
   testResult,
   loadingChanges,
@@ -72,6 +85,9 @@ export function ChatWorkspace({
   changeNotice,
   onChangeChatModel,
   onChangeTurnOverride,
+  onChangeApprovalMode,
+  onApprovePlan,
+  onRejectPlan,
   onSendPrompt,
   onCancelTurn,
   onCreateChat,
@@ -242,6 +258,15 @@ export function ChatWorkspace({
         ) : null}
       </div>
 
+      {activeTaskRun && activeTaskRun.state === 'AWAITING_PLAN_APPROVAL' ? (
+        <PlanApprovalCard
+          taskRun={activeTaskRun}
+          busy={planActionBusy}
+          onApprovePlan={onApprovePlan}
+          onRejectPlan={onRejectPlan}
+        />
+      ) : null}
+
       {project.isValidGitRepo ? (
         <ChangeCard
           branchName={project.currentBranch}
@@ -265,7 +290,12 @@ export function ChatWorkspace({
         />
       ) : null}
 
-      <form onSubmit={(e) => void handleSubmit(e)} className="surface-card p-3">
+      <form
+        onSubmit={(e) => void handleSubmit(e)}
+        className={`surface-card p-3 ${
+          approvalMode === 'express' ? 'border-t-2 border-t-warn' : ''
+        }`}
+      >
         <textarea
           ref={composerRef}
           value={prompt}
@@ -280,14 +310,21 @@ export function ChatWorkspace({
           placeholder={`Direct ${project.name} (${project.currentBranch ?? 'repo'})...`}
           className="w-full resize-none border-0 bg-transparent text-[14px] text-ink outline-none placeholder:text-ink-tertiary"
         />
-        <div className="mt-2 flex items-center justify-between border-t border-border-subtle pt-2">
-          <ModelPicker
-            options={modelOptions}
-            selectedHandle={effectiveHandle}
-            isTurnOverride={turnOverrideHandle !== null}
-            onSelectChatModel={onChangeChatModel}
-            onSelectTurnOverride={onChangeTurnOverride}
-          />
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-border-subtle pt-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <ModelPicker
+              options={modelOptions}
+              selectedHandle={effectiveHandle}
+              isTurnOverride={turnOverrideHandle !== null}
+              onSelectChatModel={onChangeChatModel}
+              onSelectTurnOverride={onChangeTurnOverride}
+            />
+            <ApprovalModePicker
+              mode={approvalMode}
+              onChangeMode={onChangeApprovalMode}
+              disabled={Boolean(streaming)}
+            />
+          </div>
 
           {streaming ? (
             <button

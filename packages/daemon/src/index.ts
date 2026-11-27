@@ -36,6 +36,12 @@ export {
 } from './adapters/codex-adapter.js';
 export { MockAdapter, createDefaultMockAdapters, type MockAdapterOptions } from './adapters/mock-adapter.js';
 export { TurnRunner, type TurnEventSink } from './adapters/turn-runner.js';
+export {
+  ALLOWED_TASK_RUN_TRANSITIONS,
+  TaskRunOrchestrator,
+  canTransitionTaskRun,
+  type TaskRunOrchestratorOptions,
+} from './approvals/task-run-machine.js';
 export { startDaemon, type RunningDaemon, type StartDaemonOptions } from './daemon.js';
 export {
   DaemonDatabase,

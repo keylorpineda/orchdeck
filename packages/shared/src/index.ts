@@ -58,6 +58,7 @@ export {
   type DaemonHealthResult,
   type DaemonMethod,
   type DaemonMethodMap,
+  type DaemonNotification,
   type DaemonNotificationMap,
   type DaemonNotificationMethod,
   type DaemonPingParams,
@@ -90,12 +91,28 @@ export {
   type ProjectsListResult,
   type ProjectsUpdateParams,
   type ProjectsUpdateResult,
+  type TaskRunActionParams,
+  type TaskRunActionResult,
+  type TaskRunGetResult,
+  type TaskRunStartParams,
+  type TaskRunStartResult,
   type TestRunResult,
   type TurnCancelParams,
   type TurnCancelResult,
   type TurnStartParams,
   type TurnStartResult,
+  type UsageSummaryParams,
 } from './rpc.js';
+
+export {
+  TASK_RUN_STATES,
+  type ProviderUsageSummary,
+  type TaskRunRecord,
+  type TaskRunState,
+  type TaskRunUpdatedNotificationParams,
+  type UsageSummaryResult,
+  type UsageWindowBucket,
+} from './task-run.js';
 
 export { redactSecrets } from './secret-redactor.js';
 export { CO_AUTHOR_TRAILER_REGEX, DEFAULT_BLOCKED_BILLING_KEYS } from './security.js';

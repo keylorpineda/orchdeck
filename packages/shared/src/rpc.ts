@@ -5,6 +5,11 @@ import type {
   ProviderId,
   TurnEventNotificationParams,
 } from './adapter.js';
+import type {
+  TaskRunRecord,
+  TaskRunUpdatedNotificationParams,
+  UsageSummaryResult,
+} from './task-run.js';
 
 export const JSONRPC_VERSION = '2.0' as const;
 export const DAEMON_PROTOCOL_VERSION = '0.1.0' as const;
@@ -295,6 +300,35 @@ export interface ChangesDiscardResult {
   readonly stashRef: string | null;
 }
 
+export interface TaskRunStartParams {
+  readonly projectId: string;
+  readonly chatId: string;
+  readonly cwd: string;
+  readonly modelHandle: string;
+  readonly prompt: string;
+  readonly mode: ApprovalMode;
+}
+
+export interface TaskRunStartResult {
+  readonly taskRun: TaskRunRecord;
+}
+
+export interface TaskRunActionParams {
+  readonly taskRunId: string;
+}
+
+export interface TaskRunActionResult {
+  readonly taskRun: TaskRunRecord;
+}
+
+export interface TaskRunGetResult {
+  readonly taskRun: TaskRunRecord | null;
+}
+
+export interface UsageSummaryParams {
+  readonly providerId?: ProviderId | undefined;
+}
+
 export type EmptyParams = Record<string, never>;
 
 export interface DaemonMethodMap {
@@ -390,12 +424,33 @@ export interface DaemonMethodMap {
     params: ChangesDiscardParams;
     result: ChangesDiscardResult;
   };
+  'taskRun.start': {
+    params: TaskRunStartParams;
+    result: TaskRunStartResult;
+  };
+  'taskRun.approvePlan': {
+    params: TaskRunActionParams;
+    result: TaskRunActionResult;
+  };
+  'taskRun.rejectPlan': {
+    params: TaskRunActionParams;
+    result: TaskRunActionResult;
+  };
+  'taskRun.get': {
+    params: TaskRunActionParams;
+    result: TaskRunGetResult;
+  };
+  'usage.summary': {
+    params: UsageSummaryParams;
+    result: UsageSummaryResult;
+  };
 }
 
 export type DaemonMethod = keyof DaemonMethodMap;
 
 export interface DaemonNotificationMap {
   'turn.event': TurnEventNotificationParams;
+  'taskRun.updated': TaskRunUpdatedNotificationParams;
 }
 
 export type DaemonNotificationMethod = keyof DaemonNotificationMap;
@@ -414,6 +469,10 @@ export interface JsonRpcNotification<
   readonly method: M;
   readonly params: DaemonNotificationMap[M];
 }
+
+export type DaemonNotification = {
+  readonly [M in DaemonNotificationMethod]: JsonRpcNotification<M>;
+}[DaemonNotificationMethod];
 
 export interface JsonRpcErrorObject {
   readonly code: number;

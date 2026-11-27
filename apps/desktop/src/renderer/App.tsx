@@ -5,6 +5,8 @@ import {
   type ChatRecord,
   type MessageRecord,
   type ProjectWithGitStatus,
+  type TaskRunRecord,
+  type TaskRunUpdatedNotificationParams,
   type TestRunResult,
   type TurnEventNotificationParams,
 } from '@orchdeck/shared';
@@ -12,6 +14,7 @@ import { ChatWorkspace, type MessageTurnMeta } from './components/ChatWorkspace'
 import { ProjectSidebar } from './components/ProjectSidebar';
 import { ThemeProvider } from './components/ThemeProvider';
 import { WorkbenchShell } from './components/WorkbenchShell';
+import type { V01ApprovalMode } from './state/approval-mode';
 import {
   FALLBACK_MODEL_OPTIONS,
   applyTurnEventToDraft,
@@ -36,6 +39,9 @@ function WorkbenchApp() {
   const [modelOptions, setModelOptions] = useState<readonly ModelOption[]>(FALLBACK_MODEL_OPTIONS);
   const [chatModelHandle, setChatModelHandle] = useState('claude:opus-4-6:high');
   const [turnOverrideHandle, setTurnOverrideHandle] = useState<string | null>(null);
+  const [approvalMode, setApprovalMode] = useState<V01ApprovalMode>('architect');
+  const [activeTaskRun, setActiveTaskRun] = useState<TaskRunRecord | null>(null);
+  const [planActionBusy, setPlanActionBusy] = useState(false);
   const [streaming, setStreaming] = useState<StreamingTurnState | null>(null);
   const [bridgeError, setBridgeError] = useState<string | null>(null);
   const [changeSnapshot, setChangeSnapshot] = useState<ChangeCardSnapshot | null>(null);
@@ -139,7 +145,7 @@ function WorkbenchApp() {
       return;
     }
 
-    return api.onTurnEvent((payload: TurnEventNotificationParams) => {
+    const unsubTurn = api.onTurnEvent((payload: TurnEventNotificationParams) => {
       const current = streamingRef.current;
       if (!current || current.turnId !== payload.turnId) {
         return;
@@ -185,6 +191,39 @@ function WorkbenchApp() {
           });
       }
     });
+
+    const unsubTaskRun = api.onTaskRunUpdated((payload: TaskRunUpdatedNotificationParams) => {
+      setActiveTaskRun((prev) => {
+        if (
+          prev &&
+          prev.id !== payload.taskRun.id &&
+          prev.state !== 'AWAITING_FINAL_REVIEW' &&
+          prev.state !== 'COMMITTED_ON_BRANCH' &&
+          prev.state !== 'DISCARDED'
+        ) {
+          return prev;
+        }
+        return payload.taskRun;
+      });
+
+      if (
+        selectedProjectId &&
+        payload.taskRun.projectId === selectedProjectId &&
+        (payload.taskRun.state === 'EXECUTING' ||
+          payload.taskRun.state === 'AWAITING_FINAL_REVIEW' ||
+          payload.taskRun.state === 'DISCARDED')
+      ) {
+        void api.listProjects().then(({ projects: refreshedProjects }) => {
+          setProjects(refreshedProjects);
+        });
+        void refreshChangeCard(selectedProjectId);
+      }
+    });
+
+    return () => {
+      unsubTurn();
+      unsubTaskRun();
+    };
   }, [refreshChangeCard, refreshChatsForProject, selectedProjectId]);
 
   const handleSelectProject = (projectId: string): void => {
@@ -354,24 +393,72 @@ function WorkbenchApp() {
 
     const effectiveHandle = turnOverrideHandle ?? chatModelHandle;
     setTurnOverrideHandle(null);
+    setActiveTaskRun(null);
     const parsed = parseModelHandle(effectiveHandle);
-    const started = await api.startTurn({
+    const { taskRun } = await api.startTaskRun({
       projectId: project.id,
       chatId: selectedChatId,
       cwd: project.rootPath,
       modelHandle: effectiveHandle,
       prompt,
+      mode: approvalMode,
     });
-    setStreaming({
-      turnId: started.turnId,
-      provider: parsed.provider,
-      modelId: parsed.modelId,
-      text: '',
-      thinking: '',
-      tools: [],
-      changedFiles: [],
-      rateLimitMessage: null,
-    });
+    setActiveTaskRun(taskRun);
+    if (taskRun.activeTurnId) {
+      setStreaming({
+        turnId: taskRun.activeTurnId,
+        provider: parsed.provider,
+        modelId: parsed.modelId,
+        text: '',
+        thinking: '',
+        tools: [],
+        changedFiles: [],
+        rateLimitMessage: null,
+      });
+    }
+  };
+
+  const handleApprovePlan = async (taskRunId: string): Promise<void> => {
+    const api = window.orchdeck;
+    if (!api) {
+      return;
+    }
+    setPlanActionBusy(true);
+    try {
+      const { taskRun } = await api.approveTaskRunPlan(taskRunId);
+      setActiveTaskRun(taskRun);
+      const { projects: refreshedProjects } = await api.listProjects();
+      setProjects(refreshedProjects);
+      if (taskRun.activeTurnId) {
+        const parsed = parseModelHandle(taskRun.modelHandle);
+        setStreaming({
+          turnId: taskRun.activeTurnId,
+          provider: parsed.provider,
+          modelId: parsed.modelId,
+          text: '',
+          thinking: '',
+          tools: [],
+          changedFiles: [],
+          rateLimitMessage: null,
+        });
+      }
+    } finally {
+      setPlanActionBusy(false);
+    }
+  };
+
+  const handleRejectPlan = async (taskRunId: string): Promise<void> => {
+    const api = window.orchdeck;
+    if (!api) {
+      return;
+    }
+    setPlanActionBusy(true);
+    try {
+      const { taskRun } = await api.rejectTaskRunPlan(taskRunId);
+      setActiveTaskRun(taskRun);
+    } finally {
+      setPlanActionBusy(false);
+    }
   };
 
   const handleCancelTurn = async (turnId: string): Promise<void> => {
@@ -493,6 +580,9 @@ function WorkbenchApp() {
         modelOptions={modelOptions}
         chatModelHandle={chatModelHandle}
         turnOverrideHandle={turnOverrideHandle}
+        approvalMode={approvalMode}
+        activeTaskRun={activeTaskRun}
+        planActionBusy={planActionBusy}
         changeSnapshot={changeSnapshot}
         testResult={testResult}
         loadingChanges={loadingChanges}
@@ -503,6 +593,9 @@ function WorkbenchApp() {
         changeNotice={changeNotice}
         onChangeChatModel={setChatModelHandle}
         onChangeTurnOverride={setTurnOverrideHandle}
+        onChangeApprovalMode={setApprovalMode}
+        onApprovePlan={handleApprovePlan}
+        onRejectPlan={handleRejectPlan}
         onSendPrompt={handleSendPrompt}
         onCancelTurn={handleCancelTurn}
         onCreateChat={handleCreateChat}

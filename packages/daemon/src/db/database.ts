@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import {
+  PROVIDER_IDS,
   isProviderId,
   redactSecrets,
   type ChatRecord,
@@ -10,6 +11,9 @@ import {
   type MessageRole,
   type ProjectRecord,
   type ProviderId,
+  type ProviderUsageSummary,
+  type UsageSummaryResult,
+  type UsageWindowBucket,
 } from '@orchdeck/shared';
 import { INITIAL_MIGRATIONS } from './migrations.js';
 
@@ -41,6 +45,7 @@ export interface RecordUsageEventInput {
   readonly cacheReadTokens: number;
   readonly durationMs: number;
   readonly rateLimited: boolean;
+  readonly createdAt?: string | undefined;
 }
 
 export interface UsageEventRecord {
@@ -461,7 +466,7 @@ export class DaemonDatabase {
 
   recordUsageEvent(input: RecordUsageEventInput): UsageEventRecord {
     const id = crypto.randomUUID();
-    const now = new Date().toISOString();
+    const now = input.createdAt ?? new Date().toISOString();
     const rateLimitedInt = input.rateLimited ? 1 : 0;
 
     this.db
@@ -522,6 +527,56 @@ export class DaemonDatabase {
       rateLimited: Number(row['rate_limited'] ?? 0) === 1,
       createdAt: String(row['created_at'] ?? ''),
     }));
+  }
+
+  private queryUsageWindow(
+    providerId: ProviderId,
+    windowHours: number,
+    cutoffIso: string,
+  ): UsageWindowBucket {
+    const row = this.db
+      .prepare(
+        `
+        SELECT
+          COUNT(*) AS total_turns,
+          COALESCE(SUM(input_tokens), 0) AS input_tokens,
+          COALESCE(SUM(output_tokens), 0) AS output_tokens,
+          COALESCE(SUM(cache_read_tokens), 0) AS cache_read_tokens,
+          COALESCE(SUM(duration_ms), 0) AS total_duration_ms,
+          COALESCE(SUM(rate_limited), 0) AS rate_limit_count
+        FROM usage_events
+        WHERE provider_id = ? AND created_at >= ?
+        `,
+      )
+      .get(providerId, cutoffIso) as Record<string, unknown> | undefined;
+
+    return {
+      windowHours,
+      totalTurns: Number(row?.['total_turns'] ?? 0),
+      inputTokens: Number(row?.['input_tokens'] ?? 0),
+      outputTokens: Number(row?.['output_tokens'] ?? 0),
+      cacheReadTokens: Number(row?.['cache_read_tokens'] ?? 0),
+      totalDurationMs: Number(row?.['total_duration_ms'] ?? 0),
+      rateLimitCount: Number(row?.['rate_limit_count'] ?? 0),
+    };
+  }
+
+  getUsageSummary(providerFilter?: ProviderId): UsageSummaryResult {
+    const nowMs = Date.now();
+    const cutoff5h = new Date(nowMs - 5 * 3600_000).toISOString();
+    const cutoff7d = new Date(nowMs - 7 * 24 * 3600_000).toISOString();
+    const targetProviders = providerFilter ? [providerFilter] : PROVIDER_IDS;
+
+    const providers: ProviderUsageSummary[] = targetProviders.map((providerId) => ({
+      providerId,
+      last5Hours: this.queryUsageWindow(providerId, 5, cutoff5h),
+      last7Days: this.queryUsageWindow(providerId, 168, cutoff7d),
+    }));
+
+    return {
+      generatedAt: new Date(nowMs).toISOString(),
+      providers,
+    };
   }
 
   close(): void {

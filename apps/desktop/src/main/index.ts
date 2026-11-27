@@ -301,6 +301,62 @@ function registerIpcHandlers(): void {
     }
     return supervisor.getClient().call('changes.discard', { projectId });
   });
+
+  ipcMain.handle('orchdeck:task-run-start', async (_event, rawParams: unknown) => {
+    const params = asObject(rawParams, 'orchdeck:task-run-start');
+    const projectId = params['projectId'];
+    const chatId = params['chatId'];
+    const cwd = params['cwd'];
+    const modelHandle = params['modelHandle'];
+    const prompt = params['prompt'];
+    const mode = params['mode'];
+
+    if (
+      typeof projectId !== 'string' ||
+      projectId.length === 0 ||
+      typeof chatId !== 'string' ||
+      chatId.length === 0 ||
+      typeof cwd !== 'string' ||
+      cwd.length === 0 ||
+      typeof modelHandle !== 'string' ||
+      modelHandle.length === 0 ||
+      typeof prompt !== 'string' ||
+      prompt.length === 0 ||
+      (mode !== 'plan' && mode !== 'architect' && mode !== 'express' && mode !== 'branch_pilot')
+    ) {
+      throw new Error('Invalid params for orchdeck:task-run-start.');
+    }
+
+    return supervisor.getClient().call('taskRun.start', {
+      projectId,
+      chatId,
+      cwd,
+      modelHandle,
+      prompt,
+      mode,
+    });
+  });
+
+  ipcMain.handle('orchdeck:task-run-approve-plan', async (_event, taskRunId: unknown) => {
+    if (typeof taskRunId !== 'string' || taskRunId.length === 0) {
+      throw new Error('Invalid taskRunId for orchdeck:task-run-approve-plan.');
+    }
+    return supervisor.getClient().call('taskRun.approvePlan', { taskRunId });
+  });
+
+  ipcMain.handle('orchdeck:task-run-reject-plan', async (_event, taskRunId: unknown) => {
+    if (typeof taskRunId !== 'string' || taskRunId.length === 0) {
+      throw new Error('Invalid taskRunId for orchdeck:task-run-reject-plan.');
+    }
+    return supervisor.getClient().call('taskRun.rejectPlan', { taskRunId });
+  });
+
+  ipcMain.handle('orchdeck:usage-summary', async (_event, providerId: unknown) => {
+    if (providerId !== undefined && providerId !== 'claude' && providerId !== 'codex' && providerId !== 'antigravity') {
+      throw new Error('Invalid providerId for orchdeck:usage-summary.');
+    }
+    return supervisor.getClient().call('usage.summary', { providerId });
+  });
 }
 
 function configureSecurityHeaders(): void {
@@ -370,8 +426,13 @@ async function bootstrap(): Promise<void> {
   configureSecurityHeaders();
   const client = await supervisor.start();
   client.onNotification((notification) => {
-    if (notification.method === 'turn.event' && mainWindow && !mainWindow.isDestroyed()) {
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      return;
+    }
+    if (notification.method === 'turn.event') {
       mainWindow.webContents.send('orchdeck:turn-event', notification.params);
+    } else if (notification.method === 'taskRun.updated') {
+      mainWindow.webContents.send('orchdeck:task-run-updated', notification.params);
     }
   });
   registerIpcHandlers();

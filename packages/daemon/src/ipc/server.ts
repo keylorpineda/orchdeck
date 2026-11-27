@@ -27,6 +27,7 @@ import {
 } from '@orchdeck/shared';
 import type { AdapterRegistry } from '../adapters/adapter-registry.js';
 import type { TurnRunner } from '../adapters/turn-runner.js';
+import type { TaskRunOrchestrator } from '../approvals/task-run-machine.js';
 import type { DaemonDatabase } from '../db/database.js';
 import { GitService } from '../git/git-service.js';
 
@@ -38,6 +39,7 @@ export interface DaemonRpcServerOptions {
   readonly authToken: string;
   readonly registry?: AdapterRegistry | undefined;
   readonly turnRunner?: TurnRunner | undefined;
+  readonly taskRunOrchestrator?: TaskRunOrchestrator | undefined;
   readonly gitService?: GitService | undefined;
   readonly startedAtMs?: number | undefined;
 }
@@ -105,6 +107,7 @@ export class DaemonRpcServer {
   private readonly authToken: string;
   private readonly registry: AdapterRegistry | undefined;
   private readonly turnRunner: TurnRunner | undefined;
+  private readonly taskRunOrchestrator: TaskRunOrchestrator | undefined;
   private readonly gitService: GitService;
   private readonly startedAtMs: number;
   private readonly server: net.Server;
@@ -120,6 +123,7 @@ export class DaemonRpcServer {
     this.authToken = options.authToken;
     this.registry = options.registry;
     this.turnRunner = options.turnRunner;
+    this.taskRunOrchestrator = options.taskRunOrchestrator;
     this.gitService = options.gitService ?? new GitService();
     this.startedAtMs = options.startedAtMs ?? Date.now();
     this.server = net.createServer((socket) => {
@@ -772,6 +776,123 @@ export class DaemonRpcServer {
           }
           const discardResult = await this.gitService.discardChangesWithBackup(project.rootPath);
           return makeSuccessResponse(request.id, discardResult);
+        }
+
+        case 'taskRun.start': {
+          if (!this.taskRunOrchestrator) {
+            return makeErrorResponse(
+              request.id,
+              JSONRPC_ERROR_CODE.INTERNAL_ERROR,
+              'TaskRunOrchestrator is not configured in this daemon instance.',
+            );
+          }
+          const projectId = params['projectId'];
+          const chatId = params['chatId'];
+          const cwd = params['cwd'];
+          const modelHandle = params['modelHandle'];
+          const prompt = params['prompt'];
+          const mode = params['mode'];
+
+          if (
+            typeof projectId !== 'string' ||
+            projectId.length === 0 ||
+            typeof chatId !== 'string' ||
+            chatId.length === 0 ||
+            typeof cwd !== 'string' ||
+            cwd.length === 0 ||
+            typeof modelHandle !== 'string' ||
+            modelHandle.length === 0 ||
+            typeof prompt !== 'string' ||
+            prompt.length === 0 ||
+            (mode !== 'plan' &&
+              mode !== 'architect' &&
+              mode !== 'express' &&
+              mode !== 'branch_pilot')
+          ) {
+            return makeErrorResponse(
+              request.id,
+              JSONRPC_ERROR_CODE.INVALID_PARAMS,
+              'taskRun.start requires valid projectId, chatId, cwd, modelHandle, prompt, and mode.',
+            );
+          }
+
+          const taskRun = await this.taskRunOrchestrator.startRun({
+            projectId,
+            chatId,
+            cwd,
+            modelHandle,
+            prompt,
+            mode,
+          });
+          return makeSuccessResponse(request.id, { taskRun });
+        }
+
+        case 'taskRun.approvePlan': {
+          if (!this.taskRunOrchestrator) {
+            return makeErrorResponse(
+              request.id,
+              JSONRPC_ERROR_CODE.INTERNAL_ERROR,
+              'TaskRunOrchestrator is not configured in this daemon instance.',
+            );
+          }
+          const taskRunId = params['taskRunId'];
+          if (typeof taskRunId !== 'string' || taskRunId.length === 0) {
+            return makeErrorResponse(
+              request.id,
+              JSONRPC_ERROR_CODE.INVALID_PARAMS,
+              'taskRun.approvePlan requires non-empty taskRunId.',
+            );
+          }
+          const taskRun = await this.taskRunOrchestrator.approvePlan(taskRunId);
+          return makeSuccessResponse(request.id, { taskRun });
+        }
+
+        case 'taskRun.rejectPlan': {
+          if (!this.taskRunOrchestrator) {
+            return makeErrorResponse(
+              request.id,
+              JSONRPC_ERROR_CODE.INTERNAL_ERROR,
+              'TaskRunOrchestrator is not configured in this daemon instance.',
+            );
+          }
+          const taskRunId = params['taskRunId'];
+          if (typeof taskRunId !== 'string' || taskRunId.length === 0) {
+            return makeErrorResponse(
+              request.id,
+              JSONRPC_ERROR_CODE.INVALID_PARAMS,
+              'taskRun.rejectPlan requires non-empty taskRunId.',
+            );
+          }
+          const taskRun = await this.taskRunOrchestrator.rejectPlan(taskRunId);
+          return makeSuccessResponse(request.id, { taskRun });
+        }
+
+        case 'taskRun.get': {
+          if (!this.taskRunOrchestrator) {
+            return makeSuccessResponse(request.id, { taskRun: null });
+          }
+          const taskRunId = params['taskRunId'];
+          if (typeof taskRunId !== 'string' || taskRunId.length === 0) {
+            return makeErrorResponse(
+              request.id,
+              JSONRPC_ERROR_CODE.INVALID_PARAMS,
+              'taskRun.get requires non-empty taskRunId.',
+            );
+          }
+          const taskRun = this.taskRunOrchestrator.getRun(taskRunId);
+          return makeSuccessResponse(request.id, { taskRun });
+        }
+
+        case 'usage.summary': {
+          const providerId = params['providerId'];
+          if (providerId !== undefined && (typeof providerId !== 'string' || !isProviderId(providerId))) {
+            return makeErrorResponse(
+              request.id,
+              JSONRPC_ERROR_CODE.INVALID_PARAMS,
+              'usage.summary providerId must be a valid ProviderId when specified.',
+            );
+          }
+          return makeSuccessResponse(request.id, this.db.getUsageSummary(providerId));
         }
 
         default:
