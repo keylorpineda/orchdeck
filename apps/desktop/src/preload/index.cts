@@ -16,6 +16,8 @@ import type {
   ChatsRenameParams,
   ChatsRenameResult,
   DaemonHealthResult,
+  HandoffRelayParams,
+  HandoffRelayResult,
   KvGetResult,
   KvSetResult,
   MessagesAppendParams,
@@ -28,6 +30,15 @@ import type {
   ProjectsUpdateParams,
   ProjectsUpdateResult,
   ProviderId,
+  RecipeCreateParams,
+  RecipeCreateResult,
+  RecipeDeleteResult,
+  RecipeRunStartParams,
+  RecipeRunStartResult,
+  RecipeRunUpdatedNotificationParams,
+  RecipeUpdateParams,
+  RecipeUpdateResult,
+  RecipesListResult,
   TaskRunActionResult,
   TaskRunStartParams,
   TaskRunStartResult,
@@ -71,8 +82,15 @@ interface OrchdeckBridge {
   approveTaskRunPlan(taskRunId: string): Promise<TaskRunActionResult>;
   rejectTaskRunPlan(taskRunId: string): Promise<TaskRunActionResult>;
   getUsageSummary(providerId?: ProviderId): Promise<UsageSummaryResult>;
+  listRecipes(): Promise<RecipesListResult>;
+  createRecipe(params: RecipeCreateParams): Promise<RecipeCreateResult>;
+  updateRecipe(params: RecipeUpdateParams): Promise<RecipeUpdateResult>;
+  deleteRecipe(id: string): Promise<RecipeDeleteResult>;
+  runRecipe(params: RecipeRunStartParams): Promise<RecipeRunStartResult>;
+  relayHandoff(params: HandoffRelayParams): Promise<HandoffRelayResult>;
   onTurnEvent(listener: (event: TurnEventNotificationParams) => void): () => void;
   onTaskRunUpdated(listener: (event: TaskRunUpdatedNotificationParams) => void): () => void;
+  onRecipeRunUpdated(listener: (event: RecipeRunUpdatedNotificationParams) => void): () => void;
 }
 
 const bridge: OrchdeckBridge = {
@@ -123,6 +141,17 @@ const bridge: OrchdeckBridge = {
     ipcRenderer.invoke('orchdeck:task-run-reject-plan', taskRunId) as Promise<TaskRunActionResult>,
   getUsageSummary: (providerId?: ProviderId) =>
     ipcRenderer.invoke('orchdeck:usage-summary', providerId) as Promise<UsageSummaryResult>,
+  listRecipes: () => ipcRenderer.invoke('orchdeck:recipes-list') as Promise<RecipesListResult>,
+  createRecipe: (params: RecipeCreateParams) =>
+    ipcRenderer.invoke('orchdeck:recipes-create', params) as Promise<RecipeCreateResult>,
+  updateRecipe: (params: RecipeUpdateParams) =>
+    ipcRenderer.invoke('orchdeck:recipes-update', params) as Promise<RecipeUpdateResult>,
+  deleteRecipe: (id: string) =>
+    ipcRenderer.invoke('orchdeck:recipes-delete', id) as Promise<RecipeDeleteResult>,
+  runRecipe: (params: RecipeRunStartParams) =>
+    ipcRenderer.invoke('orchdeck:recipes-run', params) as Promise<RecipeRunStartResult>,
+  relayHandoff: (params: HandoffRelayParams) =>
+    ipcRenderer.invoke('orchdeck:handoff-relay', params) as Promise<HandoffRelayResult>,
   onTurnEvent: (listener: (event: TurnEventNotificationParams) => void) => {
     const handler = (_ipcEvent: IpcRendererEvent, payload: TurnEventNotificationParams): void => {
       listener(payload);
@@ -142,6 +171,18 @@ const bridge: OrchdeckBridge = {
     ipcRenderer.on('orchdeck:task-run-updated', handler);
     return () => {
       ipcRenderer.off('orchdeck:task-run-updated', handler);
+    };
+  },
+  onRecipeRunUpdated: (listener: (event: RecipeRunUpdatedNotificationParams) => void) => {
+    const handler = (
+      _ipcEvent: IpcRendererEvent,
+      payload: RecipeRunUpdatedNotificationParams,
+    ): void => {
+      listener(payload);
+    };
+    ipcRenderer.on('orchdeck:recipe-run-updated', handler);
+    return () => {
+      ipcRenderer.off('orchdeck:recipe-run-updated', handler);
     };
   },
 };

@@ -6,6 +6,11 @@ import type {
   TurnEventNotificationParams,
 } from './adapter.js';
 import type {
+  RecipeRecord,
+  RecipeRunRecord,
+  RecipeRunUpdatedNotificationParams,
+} from './fusion.js';
+import type {
   TaskRunRecord,
   TaskRunUpdatedNotificationParams,
   UsageSummaryResult,
@@ -329,6 +334,87 @@ export interface UsageSummaryParams {
   readonly providerId?: ProviderId | undefined;
 }
 
+export interface RecipesListResult {
+  readonly recipes: readonly RecipeRecord[];
+}
+
+export interface RecipeCreateParams {
+  readonly name: string;
+  readonly description: string;
+  readonly plannerModel: string;
+  readonly builderModel: string;
+  readonly reviewerModel: string;
+  readonly fallbackModel?: string | null | undefined;
+  readonly maxReviewRetries?: number | undefined;
+}
+
+export interface RecipeCreateResult {
+  readonly recipe: RecipeRecord;
+}
+
+export interface RecipeUpdateParams {
+  readonly id: string;
+  readonly name?: string | undefined;
+  readonly description?: string | undefined;
+  readonly plannerModel?: string | undefined;
+  readonly builderModel?: string | undefined;
+  readonly reviewerModel?: string | undefined;
+  readonly fallbackModel?: string | null | undefined;
+  readonly maxReviewRetries?: number | undefined;
+}
+
+export interface RecipeUpdateResult {
+  readonly recipe: RecipeRecord;
+}
+
+export interface RecipeDeleteParams {
+  readonly id: string;
+}
+
+export interface RecipeDeleteResult {
+  readonly deleted: boolean;
+}
+
+export interface RecipeRunStartParams {
+  readonly recipeId: string;
+  readonly projectId: string;
+  readonly chatId: string;
+  readonly cwd: string;
+  readonly prompt: string;
+}
+
+export interface RecipeRunStartResult {
+  readonly recipeRun: RecipeRunRecord;
+}
+
+export interface RecipeRunGetParams {
+  readonly recipeRunId: string;
+}
+
+export interface RecipeRunGetResult {
+  readonly recipeRun: RecipeRunRecord | null;
+}
+
+export interface HandoffRelayParams {
+  readonly projectId: string;
+  readonly chatId: string;
+  readonly cwd: string;
+  readonly targetModelHandle: string;
+  readonly goal: string;
+  readonly decisions?: readonly string[] | undefined;
+  readonly nextStep: string;
+  readonly sourceModelHandle?: string | undefined;
+  readonly latestTestOutput?: string | undefined;
+  readonly reason?: string | undefined;
+}
+
+export interface HandoffRelayResult {
+  readonly handoffPath: string;
+  readonly turnId: string;
+  readonly sessionId: string;
+  readonly targetModelHandle: string;
+}
+
 export type EmptyParams = Record<string, never>;
 
 export interface DaemonMethodMap {
@@ -444,6 +530,34 @@ export interface DaemonMethodMap {
     params: UsageSummaryParams;
     result: UsageSummaryResult;
   };
+  'recipes.list': {
+    params: EmptyParams;
+    result: RecipesListResult;
+  };
+  'recipes.create': {
+    params: RecipeCreateParams;
+    result: RecipeCreateResult;
+  };
+  'recipes.update': {
+    params: RecipeUpdateParams;
+    result: RecipeUpdateResult;
+  };
+  'recipes.delete': {
+    params: RecipeDeleteParams;
+    result: RecipeDeleteResult;
+  };
+  'recipes.run': {
+    params: RecipeRunStartParams;
+    result: RecipeRunStartResult;
+  };
+  'recipes.getRun': {
+    params: RecipeRunGetParams;
+    result: RecipeRunGetResult;
+  };
+  'handoff.relay': {
+    params: HandoffRelayParams;
+    result: HandoffRelayResult;
+  };
 }
 
 export type DaemonMethod = keyof DaemonMethodMap;
@@ -451,6 +565,7 @@ export type DaemonMethod = keyof DaemonMethodMap;
 export interface DaemonNotificationMap {
   'turn.event': TurnEventNotificationParams;
   'taskRun.updated': TaskRunUpdatedNotificationParams;
+  'recipeRun.updated': RecipeRunUpdatedNotificationParams;
 }
 
 export type DaemonNotificationMethod = keyof DaemonNotificationMap;

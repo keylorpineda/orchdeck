@@ -1,10 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  parseInlineMention,
   parseModelHandle,
   type ChangeCardSnapshot,
   type ChatRecord,
   type MessageRecord,
   type ProjectWithGitStatus,
+  type RecipeCreateParams,
+  type RecipeRecord,
+  type RecipeRunRecord,
+  type RecipeRunUpdatedNotificationParams,
   type TaskRunRecord,
   type TaskRunUpdatedNotificationParams,
   type TestRunResult,
@@ -42,6 +47,12 @@ function WorkbenchApp() {
   const [approvalMode, setApprovalMode] = useState<V01ApprovalMode>('architect');
   const [activeTaskRun, setActiveTaskRun] = useState<TaskRunRecord | null>(null);
   const [planActionBusy, setPlanActionBusy] = useState(false);
+  const [recipes, setRecipes] = useState<readonly RecipeRecord[]>([]);
+  const [selectedRecipeId, setSelectedRecipeId] = useState<string | null>(null);
+  const [activeRecipeRun, setActiveRecipeRun] = useState<RecipeRunRecord | null>(null);
+  const [rateLimitBanner, setRateLimitBanner] = useState<string | null>(null);
+  const [relayingHandoff, setRelayingHandoff] = useState(false);
+  const [handoffNotice, setHandoffNotice] = useState<string | null>(null);
   const [streaming, setStreaming] = useState<StreamingTurnState | null>(null);
   const [bridgeError, setBridgeError] = useState<string | null>(null);
   const [changeSnapshot, setChangeSnapshot] = useState<ChangeCardSnapshot | null>(null);
@@ -98,12 +109,11 @@ function WorkbenchApp() {
     }
 
     try {
-      const [{ projects: loadedProjects }, { adapters }] = await Promise.all([
-        api.listProjects(),
-        api.listAdapters(),
-      ]);
+      const [{ projects: loadedProjects }, { adapters }, { recipes: loadedRecipes }] =
+        await Promise.all([api.listProjects(), api.listAdapters(), api.listRecipes()]);
       setProjects(loadedProjects);
       setModelOptions(buildModelCatalog(adapters));
+      setRecipes(loadedRecipes);
 
       const chatMap: Record<string, readonly ChatRecord[]> = {};
       await Promise.all(
@@ -152,9 +162,16 @@ function WorkbenchApp() {
       }
 
       const nextState = applyTurnEventToDraft(current, payload.event);
+      if (payload.event.type === 'rate_limit') {
+        setRateLimitBanner(payload.event.message);
+      }
       if (payload.event.type !== 'done') {
         setStreaming(nextState);
         return;
+      }
+
+      if (payload.event.outcome === 'rate_limited' && nextState.rateLimitMessage) {
+        setRateLimitBanner(nextState.rateLimitMessage);
       }
 
       const finalText = nextState.text.trim() || nextState.rateLimitMessage || '';
@@ -220,9 +237,27 @@ function WorkbenchApp() {
       }
     });
 
+    const unsubRecipeRun = api.onRecipeRunUpdated((payload: RecipeRunUpdatedNotificationParams) => {
+      setActiveRecipeRun(payload.recipeRun);
+      if (payload.recipeRun.status === 'RATE_LIMITED' && payload.recipeRun.errorMessage) {
+        setRateLimitBanner(payload.recipeRun.errorMessage);
+      }
+      if (
+        selectedProjectId &&
+        payload.recipeRun.projectId === selectedProjectId &&
+        payload.recipeRun.status !== 'RUNNING'
+      ) {
+        void api.listProjects().then(({ projects: refreshedProjects }) => {
+          setProjects(refreshedProjects);
+        });
+        void refreshChangeCard(selectedProjectId);
+      }
+    });
+
     return () => {
       unsubTurn();
       unsubTaskRun();
+      unsubRecipeRun();
     };
   }, [refreshChangeCard, refreshChatsForProject, selectedProjectId]);
 
@@ -391,16 +426,33 @@ function WorkbenchApp() {
     ]);
     setMessages(updatedMessages);
 
-    const effectiveHandle = turnOverrideHandle ?? chatModelHandle;
+    const mention = parseInlineMention(prompt);
+    const effectivePrompt = mention.cleanedPrompt;
+    const effectiveHandle = mention.overrideHandle ?? turnOverrideHandle ?? chatModelHandle;
     setTurnOverrideHandle(null);
+    setRateLimitBanner(null);
+    setHandoffNotice(null);
     setActiveTaskRun(null);
+
+    if (selectedRecipeId && !mention.overrideHandle) {
+      const { recipeRun } = await api.runRecipe({
+        recipeId: selectedRecipeId,
+        projectId: project.id,
+        chatId: selectedChatId,
+        cwd: project.rootPath,
+        prompt: effectivePrompt,
+      });
+      setActiveRecipeRun(recipeRun);
+      return;
+    }
+
     const parsed = parseModelHandle(effectiveHandle);
     const { taskRun } = await api.startTaskRun({
       projectId: project.id,
       chatId: selectedChatId,
       cwd: project.rootPath,
       modelHandle: effectiveHandle,
-      prompt,
+      prompt: effectivePrompt,
       mode: approvalMode,
     });
     setActiveTaskRun(taskRun);
@@ -415,6 +467,72 @@ function WorkbenchApp() {
         changedFiles: [],
         rateLimitMessage: null,
       });
+    }
+  };
+
+  const handleCreateRecipe = async (params: RecipeCreateParams): Promise<void> => {
+    const api = window.orchdeck;
+    if (!api) {
+      return;
+    }
+    const { recipe } = await api.createRecipe(params);
+    const { recipes: refreshed } = await api.listRecipes();
+    setRecipes(refreshed);
+    setSelectedRecipeId(recipe.id);
+  };
+
+  const handleDeleteRecipe = async (recipeId: string): Promise<void> => {
+    const api = window.orchdeck;
+    if (!api) {
+      return;
+    }
+    await api.deleteRecipe(recipeId);
+    const { recipes: refreshed } = await api.listRecipes();
+    setRecipes(refreshed);
+    if (selectedRecipeId === recipeId) {
+      setSelectedRecipeId(null);
+    }
+  };
+
+  const handleRelayHandoff = async (targetModelHandle: string): Promise<void> => {
+    const api = window.orchdeck;
+    const project = projects.find((p) => p.id === selectedProjectId) ?? null;
+    if (!api || !project || !selectedChatId) {
+      return;
+    }
+    setRelayingHandoff(true);
+    setHandoffNotice(null);
+    try {
+      const lastUserMsg = [...messages].reverse().find((m) => m.role === 'user');
+      const lastAssistantMsg = [...messages].reverse().find((m) => m.role === 'assistant');
+      const relayed = await api.relayHandoff({
+        projectId: project.id,
+        chatId: selectedChatId,
+        cwd: project.rootPath,
+        targetModelHandle,
+        goal: lastUserMsg?.content ?? 'Continue active repository task cleanly',
+        decisions: lastAssistantMsg ? [lastAssistantMsg.content.slice(0, 240)] : [],
+        nextStep: 'Continue work from the deterministic handoff packet.',
+        sourceModelHandle: turnOverrideHandle ?? chatModelHandle,
+        latestTestOutput: testResult?.output ?? '',
+        reason: rateLimitBanner ?? 'Manual 1-click engine relay',
+      });
+      setRateLimitBanner(null);
+      setChatModelHandle(relayed.targetModelHandle);
+      setHandoffNotice(`Saved ${relayed.handoffPath} and resumed on ${relayed.targetModelHandle}.`);
+      const parsed = parseModelHandle(relayed.targetModelHandle);
+      setStreaming({
+        turnId: relayed.turnId,
+        provider: parsed.provider,
+        modelId: parsed.modelId,
+        text: '',
+        thinking: '',
+        tools: [],
+        changedFiles: [],
+        rateLimitMessage: null,
+      });
+    } finally {
+      setRelayingHandoff(false);
     }
   };
 
@@ -583,6 +701,12 @@ function WorkbenchApp() {
         approvalMode={approvalMode}
         activeTaskRun={activeTaskRun}
         planActionBusy={planActionBusy}
+        recipes={recipes}
+        selectedRecipeId={selectedRecipeId}
+        activeRecipeRun={activeRecipeRun}
+        rateLimitBanner={rateLimitBanner}
+        relayingHandoff={relayingHandoff}
+        handoffNotice={handoffNotice}
         changeSnapshot={changeSnapshot}
         testResult={testResult}
         loadingChanges={loadingChanges}
@@ -594,6 +718,10 @@ function WorkbenchApp() {
         onChangeChatModel={setChatModelHandle}
         onChangeTurnOverride={setTurnOverrideHandle}
         onChangeApprovalMode={setApprovalMode}
+        onSelectRecipe={setSelectedRecipeId}
+        onCreateRecipe={handleCreateRecipe}
+        onDeleteRecipe={handleDeleteRecipe}
+        onRelayHandoff={handleRelayHandoff}
         onApprovePlan={handleApprovePlan}
         onRejectPlan={handleRejectPlan}
         onSendPrompt={handleSendPrompt}

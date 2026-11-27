@@ -1,12 +1,16 @@
 import { PaperPlaneRight, Stop } from '@phosphor-icons/react';
 import { useRef, useState, type FormEvent } from 'react';
-import type {
-  ChangeCardSnapshot,
-  ChatRecord,
-  MessageRecord,
-  ProjectWithGitStatus,
-  TaskRunRecord,
-  TestRunResult,
+import {
+  parseInlineMention,
+  type ChangeCardSnapshot,
+  type ChatRecord,
+  type MessageRecord,
+  type ProjectWithGitStatus,
+  type RecipeCreateParams,
+  type RecipeRecord,
+  type RecipeRunRecord,
+  type TaskRunRecord,
+  type TestRunResult,
 } from '@orchdeck/shared';
 import type { V01ApprovalMode } from '../state/approval-mode';
 import {
@@ -17,10 +21,13 @@ import {
 } from '../state/turn-stream';
 import { ApprovalModePicker } from './ApprovalModePicker';
 import { ChangeCard } from './ChangeCard';
+import { CoordinationLogCard } from './CoordinationLogCard';
 import { EngineMark } from './EngineMark';
+import { HandoffRelayBanner } from './HandoffRelayBanner';
 import { MarkdownContent } from './MarkdownContent';
 import { ModelPicker } from './ModelPicker';
 import { PlanApprovalCard } from './PlanApprovalCard';
+import { RecipePicker } from './RecipePicker';
 import { ToolActivityBlock } from './ToolActivityBlock';
 
 export interface MessageTurnMeta {
@@ -41,6 +48,12 @@ export interface ChatWorkspaceProps {
   readonly approvalMode: V01ApprovalMode;
   readonly activeTaskRun: TaskRunRecord | null;
   readonly planActionBusy: boolean;
+  readonly recipes: readonly RecipeRecord[];
+  readonly selectedRecipeId: string | null;
+  readonly activeRecipeRun: RecipeRunRecord | null;
+  readonly rateLimitBanner: string | null;
+  readonly relayingHandoff: boolean;
+  readonly handoffNotice: string | null;
   readonly changeSnapshot: ChangeCardSnapshot | null;
   readonly testResult: TestRunResult | null;
   readonly loadingChanges: boolean;
@@ -52,6 +65,10 @@ export interface ChatWorkspaceProps {
   readonly onChangeChatModel: (handle: string) => void;
   readonly onChangeTurnOverride: (handle: string | null) => void;
   readonly onChangeApprovalMode: (mode: V01ApprovalMode) => void;
+  readonly onSelectRecipe: (recipeId: string | null) => void;
+  readonly onCreateRecipe: (params: RecipeCreateParams) => Promise<void>;
+  readonly onDeleteRecipe: (recipeId: string) => Promise<void>;
+  readonly onRelayHandoff: (targetModelHandle: string) => Promise<void>;
   readonly onApprovePlan: (taskRunId: string) => Promise<void>;
   readonly onRejectPlan: (taskRunId: string) => Promise<void>;
   readonly onSendPrompt: (prompt: string) => Promise<void>;
@@ -75,6 +92,12 @@ export function ChatWorkspace({
   approvalMode,
   activeTaskRun,
   planActionBusy,
+  recipes,
+  selectedRecipeId,
+  activeRecipeRun,
+  rateLimitBanner,
+  relayingHandoff,
+  handoffNotice,
   changeSnapshot,
   testResult,
   loadingChanges,
@@ -86,6 +109,10 @@ export function ChatWorkspace({
   onChangeChatModel,
   onChangeTurnOverride,
   onChangeApprovalMode,
+  onSelectRecipe,
+  onCreateRecipe,
+  onDeleteRecipe,
+  onRelayHandoff,
   onApprovePlan,
   onRejectPlan,
   onSendPrompt,
@@ -101,6 +128,7 @@ export function ChatWorkspace({
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
 
   const effectiveHandle = turnOverrideHandle ?? chatModelHandle;
+  const parsedMention = parseInlineMention(prompt);
 
   if (!project) {
     return (
@@ -258,6 +286,10 @@ export function ChatWorkspace({
         ) : null}
       </div>
 
+      {activeRecipeRun ? (
+        <CoordinationLogCard recipeRun={activeRecipeRun} modelOptions={modelOptions} />
+      ) : null}
+
       {activeTaskRun && activeTaskRun.state === 'AWAITING_PLAN_APPROVAL' ? (
         <PlanApprovalCard
           taskRun={activeTaskRun}
@@ -266,6 +298,15 @@ export function ChatWorkspace({
           onRejectPlan={onRejectPlan}
         />
       ) : null}
+
+      <HandoffRelayBanner
+        modelOptions={modelOptions}
+        currentModelHandle={effectiveHandle}
+        rateLimitReason={rateLimitBanner}
+        busy={relayingHandoff}
+        lastHandoffNotice={handoffNotice}
+        onRelay={onRelayHandoff}
+      />
 
       {project.isValidGitRepo ? (
         <ChangeCard
@@ -307,9 +348,15 @@ export function ChatWorkspace({
             }
           }}
           rows={3}
-          placeholder={`Direct ${project.name} (${project.currentBranch ?? 'repo'})...`}
+          placeholder={`Direct ${project.name} (${project.currentBranch ?? 'repo'}) — tip: @neon, @codex, @opus...`}
           className="w-full resize-none border-0 bg-transparent text-[14px] text-ink outline-none placeholder:text-ink-tertiary"
         />
+        {parsedMention.overrideHandle ? (
+          <div className="tabular-mono mb-1.5 text-[11px] text-accent">
+            Inline override @{parsedMention.alias} {'→'}{' '}
+            {formatModelLabel(parsedMention.overrideHandle, modelOptions)}
+          </div>
+        ) : null}
         <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-border-subtle pt-2">
           <div className="flex flex-wrap items-center gap-2">
             <ModelPicker
@@ -318,6 +365,15 @@ export function ChatWorkspace({
               isTurnOverride={turnOverrideHandle !== null}
               onSelectChatModel={onChangeChatModel}
               onSelectTurnOverride={onChangeTurnOverride}
+            />
+            <RecipePicker
+              recipes={recipes}
+              selectedRecipeId={selectedRecipeId}
+              modelOptions={modelOptions}
+              disabled={Boolean(streaming) || activeRecipeRun?.status === 'RUNNING'}
+              onSelectRecipe={onSelectRecipe}
+              onCreateRecipe={onCreateRecipe}
+              onDeleteRecipe={onDeleteRecipe}
             />
             <ApprovalModePicker
               mode={approvalMode}

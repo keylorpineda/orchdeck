@@ -6,6 +6,7 @@ import { createDefaultMockAdapters } from './adapters/mock-adapter.js';
 import { TurnRunner } from './adapters/turn-runner.js';
 import { TaskRunOrchestrator } from './approvals/task-run-machine.js';
 import { DaemonDatabase } from './db/database.js';
+import { RecipeOrchestrator } from './fusion/recipe-orchestrator.js';
 import { GitService } from './git/git-service.js';
 import { DaemonRpcServer } from './ipc/server.js';
 import { resolveDefaultDataDir, resolveSocketPath } from './ipc/socket-path.js';
@@ -54,6 +55,15 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Run
     },
   });
 
+  const recipeOrchestrator = new RecipeOrchestrator({
+    db,
+    turnRunner,
+    gitService,
+    emitUpdated: (recipeRun) => {
+      server?.broadcastNotification('recipeRun.updated', { recipeRun });
+    },
+  });
+
   server = new DaemonRpcServer({
     db,
     socketPath,
@@ -61,6 +71,7 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Run
     registry,
     turnRunner,
     taskRunOrchestrator,
+    recipeOrchestrator,
     gitService,
   });
 
@@ -77,6 +88,7 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Run
     socketPath,
     authToken,
     close: async () => {
+      recipeOrchestrator.dispose();
       taskRunOrchestrator.dispose();
       await server.stop();
       db.close();

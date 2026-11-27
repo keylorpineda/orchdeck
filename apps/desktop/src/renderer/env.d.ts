@@ -17,6 +17,8 @@ import type {
   ChatsRenameParams,
   ChatsRenameResult,
   DaemonHealthResult,
+  HandoffRelayParams,
+  HandoffRelayResult,
   KvGetResult,
   KvSetResult,
   MessagesAppendParams,
@@ -29,6 +31,15 @@ import type {
   ProjectsUpdateParams,
   ProjectsUpdateResult,
   ProviderId,
+  RecipeCreateParams,
+  RecipeCreateResult,
+  RecipeDeleteResult,
+  RecipeRunStartParams,
+  RecipeRunStartResult,
+  RecipeRunUpdatedNotificationParams,
+  RecipeUpdateParams,
+  RecipeUpdateResult,
+  RecipesListResult,
   TaskRunActionResult,
   TaskRunStartParams,
   TaskRunStartResult,
@@ -72,8 +83,15 @@ export interface OrchdeckApi {
   approveTaskRunPlan(taskRunId: string): Promise<TaskRunActionResult>;
   rejectTaskRunPlan(taskRunId: string): Promise<TaskRunActionResult>;
   getUsageSummary(providerId?: ProviderId): Promise<UsageSummaryResult>;
+  listRecipes(): Promise<RecipesListResult>;
+  createRecipe(params: RecipeCreateParams): Promise<RecipeCreateResult>;
+  updateRecipe(params: RecipeUpdateParams): Promise<RecipeUpdateResult>;
+  deleteRecipe(id: string): Promise<RecipeDeleteResult>;
+  runRecipe(params: RecipeRunStartParams): Promise<RecipeRunStartResult>;
+  relayHandoff(params: HandoffRelayParams): Promise<HandoffRelayResult>;
   onTurnEvent(listener: (event: TurnEventNotificationParams) => void): () => void;
   onTaskRunUpdated(listener: (event: TaskRunUpdatedNotificationParams) => void): () => void;
+  onRecipeRunUpdated(listener: (event: RecipeRunUpdatedNotificationParams) => void): () => void;
 }
 
 declare global {
