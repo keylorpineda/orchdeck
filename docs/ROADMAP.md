@@ -1,52 +1,52 @@
-# Roadmap — Pauta
+# Roadmap — Orchdeck
 
-El plan está diseñado bajo la regla anti-vaporware: **`v0.1` debe ser lo bastante sólido para usarlo todos los días en construir `v0.2`.**
-
----
-
-## Fase 0 — Spike Técnico y Fundaciones
-**Objetivo:** eliminar incertidumbre sobre los CLIs oficiales antes de construir la UI.
-- Validar invocación headless, streaming, selección de modelo, modos read-only y detección de rate-limit en `claude`, `codex` y `agy` sin API keys.
-- Scaffolding del monorepo: Shell Electron + Core Daemon desacoplado (`JSON-RPC` + `SQLite WAL`) + micro-helper Win32 Job Objects.
-- Definir contrato `ProviderAdapter`, `NormalizedEvent` y `MockAdapter` con fixtures para CI.
-- Implementar sanitización de variables de entorno (`API_KEY`s) y `git shim` bloqueador de `commit`/`push`.
-
-## `v0.1` — Daily Driver Multi-Motor
-**Objetivo:** app usable todos los días con los 3 motores bajo contrato mínimo común, Tarjeta de Cambios y protección dura de `main`.
-- Sistema de diseño *«Taller Editorial de Precisión»* (tokens light/dark, IBM Plex, Phosphor, marcas geométricas).
-- CRUD de proyectos (repos git locales), sidebar de chats y persistencia en SQLite.
-- Adaptadores con versión fijada y tests de contrato: **Claude Code** (Tier 1), **Codex CLI** (Tier 1) y **Antigravity CLI** (Tier 1/Beta), usando *Native Passthrough* para plugins.
-- Hilo de chat en streaming con selector de motor/modelo por chat y atribución visual.
-- **Tarjeta de Cambios:** diff con Shiki, comando de tests configurable por proyecto, **Aprobar** (commit limpio con identidad del usuario, sin co-autores), **Pedir cambios** y **Descartar**.
-- Modos iniciales en UI: **Arquitecto** y **Relámpago** + registro silencioso de eventos de uso y rate-limits en SQLite.
-
-## `v0.2` — Fusión, Modo Equipo, Cuotas y Worktrees
-**Objetivo:** entregar la colaboración real entre modelos, el control fino de autonomía y el paralelismo seguro.
-- **Recetas de Fusión (3 slots):** `Planifica → Implementa → Revisa`, más override táctico por turno (`@neon`, `@codex`, `@opus`).
-- **Handoff Packet determinista** (`.pauta/handoff.md` vía `.git/info/exclude`) y relevo con 1 clic (manual y automático/asistido al detectar cuota agotada).
-- **Los 4 Modos de Aprobación completos:** `Plan`, `Arquitecto`, `Relámpago`, `Piloto en Rama` + verificación de permisos por rol (`read_only` vs `worktree_write`).
-- **Tarjeta *Second Opinion*:** 2 modelos `read_only` lado a lado dentro del mismo hilo lineal.
-- **Panel honesto de Uso y Cuotas:** signos en barra superior, telemetría verificada (5h/7d) y calibración empírica local.
-- **Comentarios inline por línea** en Tarjetas de Cambios y **Git Worktrees opt-in** para tareas paralelas en un mismo proyecto.
-
-## `v0.3` — Plugins Unificados y Memoria Compartida
-**Objetivo:** visibilidad y control del ecosistema de las 3 apps y continuidad entre sesiones.
-- **Drawer de Plugins (Inspector + Switchboard):** catálogo unificado de plugins/MCPs instalados vs activos por proyecto + portabilidad de `SKILL.md`.
-- **Local MCP Hub:** proxy agregador con deduplicación de instancias con estado y Policy Gate de aprobaciones.
-- **Memoria compartida del proyecto:** decisiones, convenciones y pendientes editables, con puente controlado hacia `AGENTS.md` y `CLAUDE.md`.
-
-## `v1.0` — Inteligencia, Pulido y Ecosistema
-**Objetivo:** recomendaciones basadas en datos reales y distribución estable.
-- Registro de métricas por tarea (tasa de aprobación, iteraciones, duración) y **recomendador de modelo/receta** basado en historial real + heurísticas locales (sin gastar tokens extra en un router LLM).
-- Empaquetado firmado (Windows/macOS), auto-updates y SDK documentado para nuevos adaptadores de la comunidad.
+Built around one anti-vaporware rule: **`v0.1` must be solid enough to use every day while building `v0.2`.**
 
 ---
 
-## Non-Goals (Fuera de alcance en v1)
+## Phase 0 — Technical Spike & Foundations
+**Goal:** eliminate CLI unknowns before building the UI.
+- Validate headless invocation, streaming output, model flags, read-only modes, and rate-limit detection across `claude`, `codex`, and `agy` without API keys.
+- Monorepo scaffolding: Electron Shell + Decoupled Core Daemon (`JSON-RPC` + `SQLite WAL`) + Win32 Job Objects helper.
+- Define `ProviderAdapter`, `NormalizedEvent`, and a fixture-driven `MockAdapter` for CI.
+- Implement `EnvSanitizer` (API key stripping) and subprocess `git` shim blocking `commit`/`push` on protected branches.
 
-- Editor de código completo o resolución visual avanzada de merge conflicts (Pauta no es un IDE).
-- Terminal interactiva completa embebida como sustituto de tu shell.
-- Cobro por tokens o integración con APIs de pago por uso como flujo principal.
-- Scraping de cookies o endpoints web privados para leer cuotas de suscripción.
-- Editor visual de grafos/workflows arbitrarios tipo n8n.
-- Bases de datos vectoriales opacas para memoria cuando archivos Markdown estructurados + SQLite resuelven el problema con transparencia.
+## `v0.1` — Multi-Engine Daily Driver
+**Goal:** daily-driver desktop chat supporting all 3 engines under a minimal common contract, Change Cards, and hard `main` protection.
+- *Precision Editorial Workbench* Design System (light/dark tokens, IBM Plex, Phosphor, geometric marks).
+- Local project (Git repo) CRUD, chat sidebar, and SQLite persistence.
+- Version-pinned adapters with contract tests: **Claude Code** (Tier 1), **Codex CLI** (Tier 1), and **Antigravity CLI** (Tier 1/Beta), using *Native Passthrough* for plugins.
+- Streaming chat thread with per-chat/per-turn engine & model picker and clear attribution.
+- **Change Card:** Shiki diff, configurable per-project test runner, **Approve** (clean user-authored commit, zero co-authors), **Request Changes**, and **Discard**.
+- Initial UI approval modes: **Architect** and **Express** + silent usage/rate-limit logging in SQLite.
+
+## `v0.2` — Model Fusion, Team Mode, Quotas & Worktrees
+**Goal:** unlock cross-model collaboration, full autonomy controls, and safe parallelism.
+- **3-Slot Team Recipes:** `Plan → Implement → Review` plus inline turn overrides (`@neon`, `@codex`, `@opus`).
+- **Deterministic Handoff Packet** (`.orchdeck/handoff.md` excluded via `.git/info/exclude`) and 1-click relay (manual and quota-triggered).
+- **All 4 Approval Modes:** `Plan`, `Architect`, `Express`, `Branch Pilot` + post-turn `read_only` role enforcement.
+- **Second Opinion Card:** 2 `read_only` models side-by-side inside the linear thread.
+- **Honest Usage & Quota Radar:** quiet top-bar marks, verified `5h`/`7d` telemetry, and empirical local cap calibration.
+- **Inline line-level diff comments** on Change Cards and opt-in **Git Worktrees** for parallel chats in the same repo.
+
+## `v0.3` — Unified Plugins & Shared Project Memory
+**Goal:** ecosystem visibility across all 3 tools and cross-session project continuity.
+- **Plugins Drawer (Inspector + Switchboard):** unified catalog of installed vs repo-active plugins/MCPs + portable `SKILL.md` injection.
+- **Local MCP Hub:** aggregating local proxy with stateful instance deduplication and a Policy Gate.
+- **Shared Project Memory:** editable decisions, conventions, and pending items synced transparently with `AGENTS.md` / `CLAUDE.md`.
+
+## `v1.0` — Intelligence, Polish & Ecosystem
+**Goal:** data-backed model recommendations and signed cross-platform distribution.
+- Per-task metrics (first-pass approval rate, iterations, latency) and hybrid **model/recipe recommender** driven by local history + heuristics (no extra LLM router calls).
+- Signed Windows/macOS installers, auto-updates, and documented `Adapter SDK` for community engines.
+
+---
+
+## Non-Goals (Out of Scope for v1)
+
+- Full code editor or advanced visual merge-conflict IDE (Orchdeck is a command deck, not an IDE).
+- Embedded interactive terminal replacement for your system shell.
+- Per-token API billing as the primary workflow.
+- Web-cookie scraping or hitting private web endpoints to read subscription quotas.
+- Visual node/DAG workflow builders (n8n-style).
+- Opaque vector databases for project memory when structured Markdown + SQLite suffice transparently.

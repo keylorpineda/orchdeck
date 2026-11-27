@@ -1,18 +1,18 @@
-# Arquitectura Técnica — Pauta
+# Technical Architecture — Orchdeck
 
-## 1. Visión General por Capas
+## 1. Layered System Overview
 
-Pauta separa estrictamente la interfaz gráfica de la ejecución de procesos, el acceso al sistema de archivos y la manipulación de Git.
+Orchdeck strictly separates the presentation shell from CLI process supervision, filesystem access, and Git mutations.
 
 ```text
 +-------------------------------------------------------------------+
 |  Shell UI (Electron Renderer: React 19 + Tailwind v4 + Shiki)     |
-|  - Renderizado de hilos, Tarjetas de Cambios, Selectores, Popovers|
+|  - Linear threads, Change Cards, Pickers, Popovers, Plugins Drawer|
 +---------------------------------+---------------------------------+
                                   | JSON-RPC 2.0 (Named Pipe / UDS)
                                   v
 +-------------------------------------------------------------------+
-|  Core Daemon (Node.js / TypeScript desacoplado + SQLite WAL)      |
+|  Core Daemon (Decoupled Node.js / TypeScript + SQLite WAL)        |
 |  - TaskRun State Machine      - Handoff Packet Builder            |
 |  - Approval & Policy Engine   - Usage Ledger & Calibration        |
 |  - GitService (git CLI + shim)- Plugin Inspector / MCP Hub (v0.3) |
@@ -30,16 +30,16 @@ Pauta separa estrictamente la interfaz gráfica de la ejecución de procesos, el
             [ Env Sanitizer + Git Shim + Win32 Job Object ]
 ```
 
-### Principios estructurales
-1. **Lógica fuera de `ipcMain`:** el proceso principal de Electron solo gestiona ventanas y ciclo de vida; toda la orquestación corre en el Core Daemon sobre `SQLite` en modo `WAL`.
-2. **Operaciones Git vía binario oficial:** `GitService` invoca siempre el ejecutable `git` del sistema con argumentos explícitos (`--`, rutas normalizadas). Nunca se usan bindings tipo `libgit2` para escritura.
-3. **Limpieza garantizada de árboles de procesos:** en Windows cada subproceso CLI corre dentro de un **Job Object** con `KILL_ON_JOB_CLOSE` (vía micro-helper nativo) para terminar también servidores MCP hijos y watchers si un turno se cancela o la app cierra.
+### Core Structural Rules
+1. **No heavy orchestration in `ipcMain`:** Electron's main process only manages windows and app lifecycle; all orchestration runs in the Core Daemon backed by `SQLite` in `WAL` mode.
+2. **System `git` binary only:** `GitService` always spawns the system `git` executable with safe explicit arguments (`--`, normalized paths). Write bindings like `libgit2` are prohibited.
+3. **Guaranteed process-tree cleanup:** on Windows, each CLI runs inside a **Job Object** (`KILL_ON_JOB_CLOSE`) via a minimal native helper so child MCP servers and test watchers never leak as zombies on cancellation or crash.
 
 ---
 
-## 2. Contrato `ProviderAdapter`
+## 2. `ProviderAdapter` Contract
 
-Cada CLI oficial se encapsula detrás de una interfaz común versionada y verificada en CI mediante un `MockAdapter` basado en fixtures reales:
+Every official CLI sits behind a version-pinned adapter verified in CI using a deterministic `MockAdapter` driven by recorded real CLI fixtures:
 
 ```ts
 export type ProviderId = 'claude' | 'codex' | 'antigravity';
@@ -70,92 +70,91 @@ export interface ProviderAdapter {
 }
 ```
 
-### Stream normalizado (`NormalizedEvent`)
-Todos los adaptadores traducen la salida nativa de su CLI a un conjunto único de eventos:
-- `text_delta`: fragmento de respuesta del modelo.
-- `thinking_delta`: traza de razonamiento (colapsable en UI).
-- `tool_use` / `tool_result`: invocación de herramienta y resumen de salida.
-- `usage`: tokens (`input`, `output`, `cache_read`, `cache_write`) y duración cuando el CLI los reporta.
-- `rate_limit`: detección de cuota agotada y timestamp estimado de reinicio si el CLI lo expone.
+### Normalized Stream (`NormalizedEvent`)
+- `text_delta`: incremental assistant output.
+- `thinking_delta`: collapsible reasoning trace.
+- `tool_use` / `tool_result`: tool invocation and summarized output.
+- `usage`: reported `input`, `output`, `cache_read`, `cache_write` tokens and turn duration.
+- `rate_limit`: quota exhaustion signal and reset timestamp when printed by the CLI.
 - `status` / `error` / `done`.
 
 ---
 
-## 3. Invariantes de Seguridad y Guardrails
+## 3. Security Invariants & Guardrails
 
-Las reglas de seguridad **nunca dependen del prompt del sistema**; se imponen en el Daemon y en el entorno del subproceso:
+Security rules **never rely on system prompts**; they are enforced in the Core Daemon and child-process environment:
 
-1. **Sanitización de entorno (cero cobro por token):** antes de lanzar cualquier CLI, el Daemon filtra `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, `GOOGLE_API_KEY` y cualquier variable configurada de billing por API, forzando el uso exclusivo de la sesión local de suscripción.
-2. **Protección absoluta de `main`:** ningún agente trabaja sobre el checkout limpio cuando apunta a `main` (o ramas protegidas configurables como `master`, `release/*`). Toda escritura ocurre en una rama aislada (`agent/<task-slug>`) o en un `git worktree` dedicado.
-3. **Git Shim en `PATH`:** el Daemon antepone un wrapper ligero de `git` en el `PATH` del subproceso que bloquea `git push`, `git commit` directo del agente (salvo commits internos controlados en modo *Piloto en Rama*), `git checkout main` y operaciones destructivas fuera del worktree.
-4. **Commits limpios con tu identidad:** cuando el usuario aprueba una Tarjeta de Cambios, `GitService` ejecuta el commit usando `git config user.name` y `user.email` locales/globales del usuario, sin `Co-Authored-By`.
-5. **Verificación de rol `read_only`:** si un rol de planificación o revisión (`Planner` / `Reviewer`) altera el árbol de trabajo pese a los flags de solo lectura del CLI, el Daemon revierte y aborta el turno con alerta.
+1. **Environment Sanitization (zero token billing):** before spawning any CLI, the Daemon strips `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, `GOOGLE_API_KEY`, and any user-configured billing keys so CLIs authenticate strictly via local subscriptions.
+2. **Hard `main` Protection:** agents never run edits on `main` (or configurable protected branches such as `master`, `release/*`). All write turns operate on an isolated task branch (`agent/<slug>`) or dedicated `git worktree`.
+3. **Subprocess `git` Shim:** the Daemon prepends a lightweight `git` wrapper in the subprocess `PATH` blocking `git push`, `git checkout main`, and unauthorized direct commits.
+4. **Clean User-Authored Commits:** when the user approves a Change Card, `GitService` creates the commit using the user's local/global `git config user.name` and `user.email`, with zero `Co-Authored-By` trailers.
+5. **Post-Turn `read_only` Verification:** if a `Planner` or `Reviewer` role mutates the working tree despite CLI read-only flags, the Daemon reverts changes, aborts the turn, and alerts the user.
 
 ---
 
-## 4. Modos de Aprobación y Máquina de Estados
+## 4. Approval Modes & `TaskRun` State Machine
 
-| Modo | Plan inicial | Ejecución en rama/worktree | Commit en rama | Merge a `main` / `push` |
+| Mode | Initial Plan | Execution in Branch / Worktree | Branch Commit | Merge to `main` / `push` |
 | :--- | :--- | :--- | :--- | :--- |
-| **1. Plan** | Solo lectura / estricto; confirma acciones sensibles | Solo lectura o confirmación por comando | Aprobación en Tarjeta | Acción explícita del usuario |
-| **2. Arquitecto** *(Default)* | Aprobación obligatoria antes de editar | Autónomo en archivos y checks allowlisted | Aprobación en Tarjeta | Acción explícita del usuario |
-| **3. Relámpago** | Auto-aprobado (visible en vivo) | Autónomo en rama/worktree con guardrails | Aprobación en Tarjeta única | Acción explícita del usuario |
-| **4. Piloto en Rama** | Auto-aprobado | Autónomo con ciclos Builder → Tests → Reviewer | Auto-commit atómico en `agent/<slug>` | **Acción explícita obligatoria** |
+| **1. Plan** | Read-only / strict; confirms sensitive actions | Read-only or per-command approval | Approval in Change Card | Explicit user action |
+| **2. Architect** *(Default)* | Mandatory approval before editing | Autonomous on files & allowlisted checks | Approval in Change Card | Explicit user action |
+| **3. Express** | Auto-approved (streamed live) | Autonomous in branch/worktree with guardrails | Approval in single Change Card | Explicit user action |
+| **4. Branch Pilot** | Auto-approved | Autonomous Builder → Tests → Reviewer loops | Atomic auto-commit on `agent/<slug>` | **Mandatory explicit user action** |
 
-> En `v0.1` se exponen **Arquitecto** y **Relámpago** en la UI para acotar QA; `v0.2` habilita los 4 modos completos.
+> `v0.1` exposes **Architect** and **Express** in the UI to keep QA tight; `v0.2` enables all 4 modes.
 
 ```text
 IDLE
   └─> PLANNING
-        ├─[Plan | Arquitecto]──────> AWAITING_PLAN_APPROVAL
+        ├─[Plan | Architect]───────> AWAITING_PLAN_APPROVAL
         │                              ├─(Approve)─> PREPARING_BRANCH
         │                              ├─(Revise)──> PLANNING
         │                              └─(Reject)──> CANCELLED
-        └─[Relámpago | Piloto]─────> PREPARING_BRANCH
+        └─[Express | Branch Pilot]─> PREPARING_BRANCH
 
 PREPARING_BRANCH ─> EXECUTING
   ├─[Plan / Policy Gate]────> AWAITING_ACTION_APPROVAL ─> EXECUTING | ABORTED
-  ├─[Rate-limit / Cuota]────> QUOTA_HANDOFF (relevo 1-clic o fallback)
-  └─[Turno finalizado]──────> VERIFYING (tests + Reviewer opcional)
+  ├─[Rate-limit / Quota]────> QUOTA_HANDOFF (1-click relay or configured fallback)
+  └─[Turn complete]─────────> VERIFYING (tests + optional Reviewer)
         ├─[Reviewer REQUEST_CHANGES & iter < max]─> EXECUTING
-        ├─[Piloto en Rama]────────────────────────> COMMITTED_ON_BRANCH
-        └─[Plan | Arquitecto | Relámpago]─────────> AWAITING_FINAL_REVIEW
+        ├─[Branch Pilot]──────────────────────────> COMMITTED_ON_BRANCH
+        └─[Plan | Architect | Express]────────────> AWAITING_FINAL_REVIEW
                                                       ├─(Approve)─────────> COMMITTED_ON_BRANCH
                                                       ├─(Request changes)─> EXECUTING
                                                       └─(Discard)─────────> DISCARDED
 
-COMMITTED_ON_BRANCH ─(Acción explícita UI)─> MERGED_BY_USER
+COMMITTED_ON_BRANCH ─(Explicit UI action)─> MERGED_BY_USER
 ```
 
 ---
 
-## 5. Fusión de Modelos y Protocolo de Handoff
+## 5. Model Fusion & Deterministic Handoff Protocol
 
-1. **Model Handle canónico:** `<provider>:<model_id>[:reasoning_effort]` (ej. `antigravity:gemini-4-neon`, `codex:gpt-5-codex:high`, `claude:opus-4-6:max`).
-2. **Recetas de 3 slots:**
-   - `Planner` (`read_only`): define alcance, invariantes y archivos objetivo (`PlanSpec`).
-   - `Builder` (`worktree_write`): implementa cambios y ejecuta suite de tests configurada.
-   - `Reviewer` (`read_only`): audita `git diff` + output de tests y emite `APPROVE` o `REQUEST_CHANGES` (máximo configurable de iteraciones para evitar bucles).
-3. **Override táctico por turno:** menciones inline (`@neon`, `@codex`, `@opus`) o selector rápido en el composer. Precedencia: `Mención explícita > Paso de Receta > Default del hilo`.
-4. **Handoff Packet determinista:** al cambiar de modelo o relevar por cuota, nunca se reenvía el transcript completo. El Daemon genera `.pauta/handoff.md` (excluido localmente vía `.git/info/exclude` sin ensuciar `.gitignore`) con:
-   - Objetivo de la tarea y memoria relevante del proyecto.
-   - Decisiones tomadas y archivos tocados (`git diff --stat`).
-   - Último resultado de tests/errores.
-   - Siguiente paso concreto.
-
----
-
-## 6. Plugins, Skills y MCPs por Etapas
-
-1. **`v0.1` — Native Passthrough:** cada CLI corre en el entorno del usuario con sus plugins/MCPs ya instalados; cero reimplementación.
-2. **`v0.2–v0.3` — Drawer Inspector + Switchboard:** descubrimiento pasivo (read-only) de configuraciones en `~/.claude/`, `~/.codex/`, `~/.gemini/antigravity/` y el repo actual. Permite activar/desactivar por workspace usando flags oficiales e inyectar/portar skills estándar (`SKILL.md`).
-3. **`v0.3` — Local MCP Hub:** proxy agregador local (`127.0.0.1` con token efímero por sesión) para compartir una sola instancia de MCPs con estado entre los 3 motores, evitar doble registro y aplicar Policy Gate ante tools destructivos.
+1. **Canonical Model Handle:** `<provider>:<model_id>[:reasoning_effort]` (e.g., `antigravity:gemini-4-neon`, `codex:gpt-5-codex:high`, `claude:opus-4-6:max`).
+2. **3-Slot Team Recipes:**
+   - `Planner` (`read_only`): produces scope, invariants, and target files (`PlanSpec`).
+   - `Builder` (`worktree_write`): implements edits and runs the project's test command.
+   - `Reviewer` (`read_only`): audits `git diff` + test output and emits `APPROVE` or `REQUEST_CHANGES` (bounded retry cap prevents infinite loops).
+3. **Per-Turn Tactical Override:** inline mentions (`@neon`, `@codex`, `@opus`) or quick picker override. Precedence: `Explicit mention > Recipe step > Thread default`.
+4. **Deterministic Handoff Packet:** when switching models or relaying after a quota limit, Orchdeck never replays raw cross-vendor transcripts. Instead, the Daemon writes `.orchdeck/handoff.md` (locally excluded via `.git/info/exclude`, never touching `.gitignore`) containing:
+   - Original task goal and relevant project memory.
+   - Decisions made and changed files (`git diff --stat`).
+   - Latest test output / failures.
+   - Concrete next step.
 
 ---
 
-## 7. Telemetría de Uso y Calibración Empírica
+## 6. Phased Plugins, Skills & MCPs
 
-Las suscripciones planas no exponen un endpoint oficial de cuota restante en tiempo real. Pauta evita cualquier estimación engañosa o scraping web:
+1. **`v0.1` — Native Passthrough:** each CLI runs in the user's environment with its installed plugins/MCPs intact.
+2. **`v0.2–v0.3` — Plugins Drawer (Inspector + Switchboard):** passive read-only discovery across `~/.claude/`, `~/.codex/`, `~/.gemini/antigravity/`, and repo configs, plus per-workspace toggles via official CLI flags and portable `SKILL.md` injection.
+3. **`v0.3` — Local MCP Hub:** local aggregating proxy (`127.0.0.1` with ephemeral session bearer token) sharing stateful MCP instances across all 3 engines, deduplicating native registrations, and enforcing a Policy Gate on mutating `tools/call`.
 
-- **Datos duros verificados:** eventos de rate-limit/cooldown reportados por los CLIs (con hora de reinicio cuando se imprime) y consumo local leído de streams/JSONL (`tokens`, `cache_read`, `turnos`, `duración`) en ventanas móviles de **5 horas** y **7 días**.
-- **Calibración empírica:** cada vez que un proveedor alcanza un límite real en una ventana, el Daemon guarda ese volumen como techo observado (`calibrated_cap`) para mostrar una presión relativa honesta (*calibración local*).
+---
+
+## 7. Honest Usage Telemetry & Empirical Calibration
+
+Flat-rate subscriptions do not expose live remaining-quota APIs. Orchdeck never fabricates official percentages or scrapes web cookies:
+
+- **Hard verified signals:** CLI-reported rate-limit/cooldown events (with reset timestamps when printed) and local consumption parsed from streams/JSONL (`tokens`, `cache_read`, `turns`, `duration`) across rolling **5-hour** and **7-day** windows.
+- **Empirical cap calibration:** whenever a provider hits a real rate-limit in a window, the Daemon records that observed volume (`calibrated_cap`) to display honest relative pressure (*local calibration*).

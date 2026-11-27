@@ -1,24 +1,24 @@
-# Guía de Contribución — Pauta
+# Contributing to Orchdeck
 
-¡Gracias por contribuir a **Pauta**! Antes de abrir un Pull Request, revisa estas reglas de flujo y calidad.
-
----
-
-## Flujo de Ramas
-
-- **`dev` (rama por defecto):** aquí ocurre toda la integración diaria. Crea tu rama desde `dev`:
-  - `feat/<area>-<descripcion>`
-  - `fix/<area>-<descripcion>`
-  - `docs/<descripcion>`
-  - `chore/<descripcion>`
-- **`main` (rama estable):** refleja únicamente releases etiquetados (`vX.Y.Z`). Solo recibe Pull Requests de release desde `dev` (o `hotfix/*` con back-merge inmediato a `dev`).
-- **Estrategia de merge:** `Squash & Merge` hacia `dev`; `Merge commit` limpio de `dev` → `main` para mantener trazabilidad de releases.
+Thank you for contributing to **Orchdeck**! Please review our branch workflow and engineering standards before opening a Pull Request.
 
 ---
 
-## Convenciones de Commits
+## Branch Workflow
 
-Usamos **Conventional Commits**:
+- **`dev` (default branch):** all daily integration happens here. Branch off `dev`:
+  - `feat/<area>-<slug>`
+  - `fix/<area>-<slug>`
+  - `docs/<slug>`
+  - `chore/<slug>`
+- **`main` (stable branch):** mirrors tagged releases (`vX.Y.Z`) only. Accepts release PRs from `dev` (or `hotfix/*` with immediate back-merge to `dev`).
+- **Merge strategy:** `Squash & Merge` into `dev`; clean `Merge commit` from `dev` → `main` to preserve release history.
+
+---
+
+## Commit Conventions
+
+We follow **Conventional Commits**:
 - `feat(adapter-claude): ...`
 - `fix(approvals): ...`
 - `docs(design): ...`
@@ -26,9 +26,9 @@ Usamos **Conventional Commits**:
 
 ---
 
-## Reglas Clave de Desarrollo
+## Development Rules
 
-1. **Tests sin quemar suscripciones:** toda suite de CI y tests unitarios de adaptadores debe correr contra `MockAdapter` y fixtures reales grabados. Nunca hagas depender los tests de credenciales activas en GitHub Actions.
-2. **Operaciones Git:** toda operación sobre repositorios en el Core Daemon debe invocar el binario `git` del sistema mediante `GitService`. No introduzcas librerías `libgit2` para escritura.
-3. **Sistema de Diseño:** respeta los tokens y prohibiciones de [DESIGN_SYSTEM.md](docs/DESIGN_SYSTEM.md). Evita colores Tailwind crudos (`indigo-*`, `purple-*`, `slate-*`) o estética genérica.
-4. **Guardrails de seguridad:** cualquier cambio en adaptadores, MCP o modos de aprobación debe verificar que se mantiene la sanitización de API keys y el bloqueo de escritura en `main`.
+1. **Test without burning subscriptions:** all CI suites and adapter contract tests must run against `MockAdapter` and recorded fixtures—never depend on live CLI credentials in GitHub Actions.
+2. **Git operations via system CLI:** all repository actions in the Core Daemon must invoke the system `git` binary through `GitService`. Do not add `libgit2`-style write bindings.
+3. **Design System compliance:** follow tokens and anti-AI-slop rules in [DESIGN_SYSTEM.md](docs/DESIGN_SYSTEM.md). Avoid raw Tailwind palette classes (`indigo-*`, `purple-*`, `slate-*`).
+4. **Security invariants:** changes to adapters, MCP handling, or approval modes must preserve API key stripping and hard `main` branch protection.

@@ -1,12 +1,12 @@
-name: Ruptura de CLI / Adaptador Externo
-description: Reporta cuando una actualización de Claude Code, Codex o Antigravity CLI rompe un adaptador.
+name: External CLI / Adapter Breakage
+description: Report when an upstream Claude Code, Codex, or Antigravity CLI release breaks an adapter.
 title: "[Adapter Breakage]: "
 labels: ["bug"]
 body:
   - type: dropdown
     id: provider
     attributes:
-      label: CLI afectado
+      label: Affected CLI
       options:
         - Claude Code (claude)
         - Codex CLI (codex)
@@ -16,22 +16,22 @@ body:
   - type: input
     id: cli_version
     attributes:
-      label: Versión instalada del CLI
-      description: Ejecuta `<cli> --version` y pega el resultado.
-      placeholder: "ej. 1.0.45"
+      label: Installed CLI Version
+      description: Run `<cli> --version` and paste the output.
+      placeholder: "e.g. 1.0.45"
     validations:
       required: true
   - type: input
     id: os
     attributes:
-      label: Sistema Operativo
+      label: Operating System
       placeholder: "Windows 11 / macOS"
     validations:
       required: true
   - type: textarea
     id: output
     attributes:
-      label: Error o cambio de formato observado (redacta tokens o rutas sensibles)
+      label: Observed Error or Format Change (redact tokens or sensitive paths)
       render: shell
     validations:
       required: true

@@ -1,20 +1,20 @@
-## Resumen
+## Summary
 
-Describe brevemente qué resuelve este PR y cómo se conecta con el roadmap de Pauta.
+Briefly describe what this PR changes and how it aligns with Orchdeck's roadmap.
 
-- Issue relacionado: #
+- Related issue: #
 
-## Tipo de cambio
+## Type of Change
 
-- [ ] `feat` (nueva funcionalidad)
-- [ ] `fix` (corrección de bug)
-- [ ] `adapter` (cambios en Claude / Codex / Antigravity)
+- [ ] `feat` (new feature)
+- [ ] `fix` (bug fix)
+- [ ] `adapter` (Claude / Codex / Antigravity adapter change)
 - [ ] `docs` / `chore`
 
-## Checklist de arquitectura y seguridad
+## Architecture & Security Checklist
 
-- [ ] Si toca el Core Daemon o adaptadores, mantiene la sanitización de variables de API keys (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`).
-- [ ] Ningún camino de ejecución permite escritura o `push` directo a `main` / ramas protegidas.
-- [ ] Los tests de adaptador corren con `MockAdapter` / fixtures sin consumir cuotas reales.
-- [ ] Si modifica UI, respeta los tokens de `docs/DESIGN_SYSTEM.md` (sin colores crudos ni estética genérica).
-- [ ] El PR apunta a la rama `dev` (salvo PRs de release hacia `main`).
+- [ ] Core Daemon / adapter changes preserve API key environment stripping (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, `GOOGLE_API_KEY`).
+- [ ] No code path allows agents to write to or push `main` / protected branches.
+- [ ] Adapter tests run with `MockAdapter` / recorded fixtures without consuming live subscriptions.
+- [ ] UI changes follow `docs/DESIGN_SYSTEM.md` tokens (no raw Tailwind palette colors or generic slop).
+- [ ] PR targets `dev` (unless it is a release PR into `main`).

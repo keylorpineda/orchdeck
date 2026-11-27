@@ -1,27 +1,27 @@
-# Política de Seguridad — Pauta
+# Security Policy — Orchdeck
 
-Pauta orquesta agentes de CLI locales que leen código, ejecutan comandos en repositorios y operan sobre tus suscripciones autenticadas. La seguridad se diseña como **controles técnicos en el Core Daemon**, nunca como simples instrucciones en un prompt.
-
----
-
-## Modelo de Amenazas y Controles Obligatorios
-
-1. **Cero cobro inesperado por tokens (Sanitización de entorno):**
-   - Antes de lanzar cualquier subproceso CLI (`claude`, `codex`, `agy`), el Daemon elimina del entorno variables de facturación por API como `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, `GOOGLE_API_KEY` (y una lista extensible por el usuario).
-2. **Protección dura de `main` y ramas protegidas:**
-   - Ningún agente ejecuta ediciones sobre `main` (o ramas protegidas configurables). Toda escritura ocurre en una rama de tarea (`agent/<slug>`) o en un `git worktree` aislado.
-   - `git push` y `git checkout` hacia ramas protegidas se bloquean en el `git shim` del `PATH` del subproceso.
-3. **Separación de roles y verificación post-turno:**
-   - Los roles de planificación y revisión (`Planner`, `Reviewer`) corren en modo `read_only`. Si un proceso en rol de solo lectura modifica archivos del árbol de trabajo, el Daemon aborta el turno y revierte el cambio.
-4. **Limpieza de procesos hijos:**
-   - En Windows, cada CLI corre dentro de un `Job Object` (`KILL_ON_JOB_CLOSE`) para evitar procesos zombis de servidores MCP o comandos en segundo plano al cancelar o cerrar la app.
-5. **Protección de credenciales y cero scraping:**
-   - Pauta **no** lee cookies del navegador, **no** realiza scraping de endpoints web privados de cuotas y **no** almacena secretos resueltos de configuraciones MCP en SQLite (solo referencias a variables/archivos).
+Orchdeck orchestrates local CLI coding agents with filesystem, shell, and subscription access. Security is enforced as **technical controls inside the Core Daemon**, never as prompt instructions.
 
 ---
 
-## Reportar una Vulnerabilidad
+## Threat Model & Mandatory Controls
 
-Si encuentras un fallo que permita saltar el bloqueo de ramas protegidas, filtrar variables de entorno/secretos o ejecutar comandos no autorizados en modo `Plan` / `Arquitecto`, **no abras un issue público**.
+1. **Zero Unexpected Token Billing (Environment Sanitization):**
+   - Before spawning any CLI (`claude`, `codex`, `agy`), the Daemon strips API billing keys such as `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, `GOOGLE_API_KEY`, and any user-configured list, forcing local subscription authentication only.
+2. **Hard Protection of `main` and Protected Branches:**
+   - Agents never edit on `main` (or configurable protected branches). All writes occur on an isolated task branch (`agent/<slug>`) or dedicated `git worktree`.
+   - `git push` and protected-branch checkouts are blocked by the subprocess `git` shim.
+3. **Role Isolation & Post-Turn Verification:**
+   - `Planner` and `Reviewer` roles run in `read_only` mode. If a read-only turn modifies the working tree despite CLI flags, the Daemon reverts the changes, aborts the turn, and alerts the user.
+4. **Child Process-Tree Cleanup:**
+   - On Windows, every CLI process runs inside a `Job Object` (`KILL_ON_JOB_CLOSE`) so child MCP servers or background watchers cannot survive cancellation or app exit.
+5. **Credential Safety & Zero Scraping:**
+   - Orchdeck **never** reads browser cookies, **never** scrapes private subscription web endpoints, and **never** persists resolved MCP secrets inside SQLite (only references to environment variables or config paths).
 
-Abre un **GitHub Security Advisory** privado en el repositorio `keylorpineda/pauta` con los pasos de reproducción, versión del sistema operativo y CLI afectado.
+---
+
+## Reporting a Vulnerability
+
+If you discover a way to bypass protected-branch guards, leak stripped environment variables/secrets, or run unauthorized mutating actions under `Plan` / `Architect` modes, **do not open a public issue**.
+
+Please open a private **GitHub Security Advisory** on `keylorpineda/orchdeck` with reproduction steps, OS version, and affected CLI details.

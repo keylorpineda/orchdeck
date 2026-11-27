@@ -1,67 +1,61 @@
-# Decisiones del Council — Pauta
+# Council Decisions — Orchdeck
 
-Este documento registra el resultado del proceso de **Council** (Fase 1 de análisis independiente con 3 consejeros especializados + Fase 2 de revisión cruzada ciega y convergencia) para definir el nombre, la arquitectura, la identidad visual, el modelo de permisos y el roadmap de la aplicación.
+This document records the decisions made through a **2-phase Council** (Phase 1 independent analysis across three specialist advisors — Principal Systems Architect, Staff Product Designer, and Product/Open-Source Strategist — followed by blind cross-review and an express English naming round).
 
 ---
 
-## 1. Elección de Nombre: **Pauta**
+## 1. Naming Decision: **Orchdeck**
 
-Se evaluaron propuestas de los 3 consejeros verificando colisiones reales en GitHub y en el ecosistema de herramientas de IA para desarrollo.
+After discarding initial candidates with existing GitHub/agent-tool collisions or non-English phrasing, the Council ran a ranked-choice vote across verified English names with **zero existing repositories on GitHub**: `Orchdeck`, `Orchrail`, `Orchline`, `Orchbay`, `Orchcraft`, `Orchyard`, `Orchway`, `Orchgrid`, `Orchrun`.
 
-### Candidatos descartados por colisión existente
-`Batuta` (`batuta-ai/batuta`, `paiml/batuta`), `Trama` (`NaNhkNaN/trama`, `nicchia-code`), `Torno` (`luisg0nc/torno`), `Skein` (`Balanov/skein`, `tryskein/skein`), `Keel` (`berkayturanci/keel`, `codejunkie99/keel`), `Lintel` (`jokerman89/lintel`, `shakibbinkabir/lintel`), `Cantor` (`CantorAI Inc.`), `Rondel` (`xelfiera-shn/rondel`), `Vireo` (`twitter/vireo`).
+### Final Vote Tally (`#1 = 3 pts`, `#2 = 2 pts`, `#3 = 1 pt`)
 
-### Votación final sobre los 6 nombres limpios
-Sistema de puntos: `#1 = 3 pts`, `#2 = 2 pts`, `#3 = 1 pt`.
-
-| Candidato | Consejero 1 (Arquitectura) | Consejero 2 (Diseño) | Consejero 3 (Producto) | Total |
+| Candidate | Advisor 1 (Systems Architect) | Advisor 2 (Product Designer) | Advisor 3 (Product Strategist) | Total |
 | :--- | :---: | :---: | :---: | :---: |
-| **Pauta** | #3 (1 pt) | #1 (3 pts) | #1 (3 pts) | **7 pts (Ganador)** |
-| **Trenza** | #1 (3 pts) | — | #3 (1 pt) | **4 pts** |
-| **Aplomo** | — | #2 (2 pts) | #2 (2 pts) | **4 pts** |
-| **Dovela** | #2 (2 pts) | #3 (1 pt) | — | **3 pts** |
-| **Tornel** | — | — | — | 0 pts |
-| **Tasto** | — | — | — | 0 pts |
+| **Orchdeck** | #1 (3 pts) | #1 (3 pts) | #1 (3 pts) | **9 pts (Unanimous Winner)** |
+| **Orchrail** | #2 (2 pts) | — | #2 (2 pts) | **4 pts** |
+| **Orchline** | — | #2 (2 pts) | #3 (1 pt) | **3 pts** |
+| **Orchbay** | #3 (1 pt) | #3 (1 pt) | — | **2 pts** |
 
-**Por qué ganó `Pauta`:**
-- Condensa en 5 letras (sin tildes ni caracteres especiales, limpia en terminal y URLs) las dos metáforas centrales del producto: el pentagrama que coordina múltiples voces/modelos en compás y la retícula editorial de precisión para revisar cambios.
-- Encaja de forma natural tanto en español como en inglés y refuerza la estética *«Taller Editorial de Precisión»*.
+**Why `Orchdeck` won unanimously:**
+- Immediately communicates a desktop **orchestration command deck** for coding agents on GitHub and in terminal/config paths (`.orchdeck/`).
+- Clean two-syllable English phonetics without collisions (`Orchcraft`) or misreadings (`Orchyard` → *orchard*), pairing naturally with our core **Change Cards** metaphor and *Precision Editorial Workbench* visual system.
 
 ---
 
-## 2. Veredictos Técnicos y de Producto
+## 2. Technical & Product Verdicts
 
-### A. Stack de Escritorio
-- **Decisión:** **Electron + Core Daemon Local Desacoplado** (Node.js/TypeScript + JSON-RPC 2.0 sobre Named Pipe en Windows / Unix Domain Socket en macOS + SQLite en modo WAL) + micro-helper Win32 (`Job Objects` con `KILL_ON_JOB_CLOSE`) para evitar procesos zombis de CLIs o MCPs hijos.
-- **Git:** invocar siempre el binario `git` del sistema con argumentos seguros y entorno sanitizado; prohibido usar `libgit2`/`nodegit` para escritura por problemas históricos con worktrees, firmas y hooks.
-- **Alternativa descartada (Tauri v2):** descartado en v1 para evitar doble stack Rust/TS, puente IPC constante con el ecosistema TypeScript/MCP y divergencias de renderizado entre WebView2 y WKWebView en diffs largos. El daemon desacoplado permite cambiar el cascarón en el futuro sin reescribir el motor.
+### A. Desktop Stack
+- **Decision:** **Electron + Decoupled Local Core Daemon** (Node.js/TypeScript + JSON-RPC 2.0 over Windows Named Pipe / macOS Unix Domain Socket + SQLite in `WAL` mode) + lightweight Win32 helper for **Windows Job Objects** (`KILL_ON_JOB_CLOSE`) to prevent orphaned CLI/MCP child processes.
+- **Git operations:** always invoke the system `git` binary with sanitized environments and safe arguments; never use `libgit2`/`nodegit` for writes due to edge cases with `git worktree`, signing, and hooks.
+- **Why not Tauri v2:** avoids maintaining a dual Rust/TS stack, constant IPC serialization overhead with TypeScript MCP SDKs, and rendering discrepancies between WebView2 and WKWebView on large virtualized diffs. The decoupled daemon keeps the UI shell replaceable later.
 
-### B. Identidad Visual (Anti-AI-Slop)
-- **Decisión:** Filosofía **«Taller Editorial de Precisión»** (*Algodón y Tinta* en claro + *Grafito Cálido y Bermellón* en oscuro), fijada desde `v0.1`.
-- **Prohibiciones:** cero gradientes púrpura/neón, cero glassmorphism gratuito, cero emojis cliché (`✨`, `🚀`, `🧠`), cero Lucide default sin criterio ni temas por defecto de `shadcn/ui`.
-- **Stack UI:** React 19 + TypeScript + Vite + Tailwind CSS v4 + Base UI/Radix + Shiki (con dos temas propios) + Phosphor Icons + `cmdk`.
+### B. Visual Identity (Anti-AI-Slop)
+- **Decision:** **«Precision Editorial Workbench»** (*Paper & Ink* light theme + *Graphite & Vermilion* dark theme), established from `v0.1`.
+- **Banned tropes:** neon purple/blue gradients, gratuitous glassmorphism, cliché AI emojis (`✨`, `🚀`, `🧠`), unstyled `shadcn/ui` defaults, and default `Lucide` chrome.
+- **UI stack:** React 19 + TypeScript + Vite + Tailwind CSS v4 + Base UI / Radix Primitives + Shiki (custom themes) + Phosphor Icons + `cmdk`.
 
-### C. Modos de Aprobación
-- **Decisión:** **4 modos ortogonales** (`Plan`, `Arquitecto` [default], `Relámpago`, `Piloto en Rama`) bajo un invariante duro aplicado en el daemon (nunca delegado al prompt): **ningún modo escribe en `main` ni ejecuta `git push` sin acción explícita del usuario**, y todo commit generado tras aprobar lleva exclusivamente la identidad `git config` del usuario.
-- **Rollout:** arquitectura diseñada para los 4 modos desde el día 1; `v0.1` expone `Arquitecto` y `Relámpago` para acotar QA, y `v0.2` completa `Plan` y `Piloto en Rama`.
+### C. Approval Modes
+- **Decision:** **4 orthogonal modes** (`Plan`, `Architect` [default], `Express`, `Branch Pilot`) enforced in the Core Daemon (never delegated to prompts): **no mode can ever write to `main` or execute `git push` without explicit user action**, and every approved commit uses solely the user's `git config` identity with zero `Co-Authored-By` trailers.
+- **Rollout:** architecture supports all 4 modes from day 1; `v0.1` exposes `Architect` and `Express` to focus QA, and `v0.2` completes `Plan` and `Branch Pilot`.
 
-### D. Fusión de Modelos
-- **Decisión:** **Handles canónicos + Recetas de 3 slots + Handoff Packet determinista** (sin editor visual de DAGs complejos).
-- Formato de modelo: `<provider>:<model_id>[:reasoning_effort]` (ej. `antigravity:gemini-4-neon`, `codex:gpt-5-codex`, `claude:opus-4-6`).
-- Cada receta asigna 3 roles (`Planifica`, `Implementa`, `Revisa`), admite override inline por turno (`@neon`, `@codex`, `@opus`) y conserva la conversación en un único hilo lineal.
-- En `v0.2` se añade la tarjeta embebida **Second Opinion** (2 modelos en modo `read_only` lado a lado dentro del mismo hilo).
+### D. Model Fusion
+- **Decision:** **Canonical Model Handles + 3-Slot Recipes + Deterministic Handoff Packet** (no complex node-graph workflow builders).
+- Handle format: `<provider>:<model_id>[:reasoning_effort]` (e.g., `antigravity:gemini-4-neon`, `codex:gpt-5-codex`, `claude:opus-4-6`).
+- Each recipe maps 3 roles (`Plan`, `Implement`, `Review`), supports inline per-turn overrides (`@neon`, `@codex`, `@opus`), and keeps the conversation in a single linear thread.
+- `v0.2` adds an embedded **Second Opinion** card (2 `read_only` models side-by-side inside the linear thread).
 
-### E. Plugins, Skills y MCPs
-- **Decisión:** **Cero reimplementación de runtimes propietarios.**
-- **Etapas:**
-  1. `v0.1`: **Native Passthrough 100%** (los CLIs corren con sus plugins/MCPs ya configurados en el entorno local).
-  2. `v0.2–v0.3`: **Drawer Inspector + Switchboard** (inventario unificado de plugins/MCPs + portabilidad de `SKILL.md` entre motores).
-  3. `v0.3`: **Local MCP Hub** (proxy agregador con deduplicación de instancias compartidas y Policy Gate para herramientas mutantes).
+### E. Plugins, Skills & MCPs
+- **Decision:** **Zero re-implementation of proprietary plugin runtimes.**
+- **Stages:**
+  1. `v0.1`: **100% Native Passthrough** (CLIs run with the user's existing plugins/MCPs).
+  2. `v0.2–v0.3`: **Plugins Drawer (Inspector + Switchboard)** for unified visibility/toggles + portable `SKILL.md` injection across engines.
+  3. `v0.3`: **Local MCP Hub** (local aggregating proxy with instance deduplication and a Policy Gate for mutating tools).
 
-### F. Tracking de Uso y Cuotas
-- **Decisión:** **Transparencia estricta (cero porcentajes inventados, cero scraping de cookies web).**
-- Se registra telemetría verificable desde streams/JSONL locales (tokens, caché, turnos, duración, eventos reales de rate-limit/cooldown) en ventanas deslizantes de 5h y 7d.
-- En la UI (`v0.2`): 3 signos discretos (`● ■ ◆`) en la barra superior + popover con estado duro (`Disponible` / `Enfriando`), actividad verificada y 4 bloques de presión estimada mediante **calibración empírica local** (cuando ocurre un rate-limit real, el volumen acumulado en esa ventana sirve como techo de referencia).
+### F. Usage & Quota Tracking
+- **Decision:** **Strict honesty — zero fabricated percentages and zero web-cookie scraping.**
+- Tracks verifiable telemetry from local streams/JSONL logs (tokens, cache hits, turns, latency, real rate-limit/cooldown events) across rolling `5h` and `7d` windows.
+- UI (`v0.2`) surfaces 3 quiet marks (`● ■ ◆`) in the top bar + popover with hard status (`Available` / `Cooldown`), verified activity, and 4 pressure blocks using **local empirical calibration** (recording observed consumption caps whenever a real rate-limit occurs).
 
-### G. Alcance de `v0.1`
-- **Decisión:** `v0.1` debe incluir el **contrato común para los 3 adaptadores** (Claude Tier 1, Codex Tier 1, Antigravity Tier 1/Beta según capacidades del CLI) para que el producto nazca fiel a su promesa multi-motor y no como otro wrapper de un solo agente. Worktrees paralelos, UI de plugins, comentarios inline y UI de cuotas pasan a `v0.2`–`v0.3`.
+### G. `v0.1` Multi-Engine Scope
+- **Decision:** `v0.1` ships with the **common adapter contract across all 3 engines** (Claude Tier 1, Codex Tier 1, Antigravity Tier 1/Beta depending on exposed CLI flags) so Orchdeck delivers its core multi-engine promise immediately rather than launching as a single-CLI wrapper. Parallel worktrees, plugin UI, inline diff comments, and quota UI follow in `v0.2`–`v0.3`.

@@ -1,26 +1,26 @@
-# Dependencias y builds
+# Dependencies and build outputs
 node_modules/
 dist/
 out/
 release/
 .vite/
 
-# Base de datos SQLite local
+# Local SQLite database files
 *.db
 *.db-wal
 *.db-shm
 
-# Entorno y secretos
+# Environment and secrets
 .env
 .env.*
 
-# Estado interno del orquestador (también excluido vía .git/info/exclude en repos objetivo)
-.pauta/
+# Internal orchestrator state (also excluded via .git/info/exclude in target repos)
+.orchdeck/
 
 # Logs
 *.log
 
-# Sistema y editores
+# OS and editors
 .DS_Store
 Thumbs.db
 .vscode/

@@ -1,32 +1,32 @@
-name: Solicitud de Funcionalidad
-description: Propón una mejora alineada con el enfoque de Pauta (sin convertirla en un IDE).
+name: Feature Request
+description: Propose an improvement aligned with Orchdeck's workbench model (without turning it into an IDE).
 title: "[Feat]: "
 labels: ["enhancement"]
 body:
   - type: textarea
     id: problem
     attributes:
-      label: Qué problema resuelve
-      description: Describe el flujo diario que hoy genera fricción.
+      label: Problem Statement
+      description: Describe the daily workflow friction this solves.
     validations:
       required: true
   - type: textarea
     id: proposal
     attributes:
-      label: Propuesta concreta
-      description: Cómo debería comportarse sin complicar la interfaz ni comprometer el control humano de git.
+      label: Proposed Behavior
+      description: How should it work while keeping UI calm and human Git control intact?
     validations:
       required: true
   - type: dropdown
     id: area
     attributes:
-      label: Área principal
+      label: Primary Area
       options:
-        - UI / Tarjetas de Cambios
-        - Fusión de Modelos / Recetas
-        - Modos de Aprobación / Seguridad
+        - UI / Change Cards
+        - Model Fusion / Recipes
+        - Approval Modes / Security
         - Plugins / Skills / MCP
-        - Uso y Cuotas
-        - Git Worktrees / Memoria
+        - Usage & Quota Radar
+        - Git Worktrees / Project Memory
     validations:
       required: true
