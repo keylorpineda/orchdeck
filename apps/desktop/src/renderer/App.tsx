@@ -6,10 +6,17 @@ import {
   type ProjectWithGitStatus,
   type TurnEventNotificationParams,
 } from '@orchdeck/shared';
-import { ChatWorkspace, type StreamingDraft } from './components/ChatWorkspace';
+import { ChatWorkspace, type MessageTurnMeta } from './components/ChatWorkspace';
 import { ProjectSidebar } from './components/ProjectSidebar';
 import { ThemeProvider } from './components/ThemeProvider';
 import { WorkbenchShell } from './components/WorkbenchShell';
+import {
+  FALLBACK_MODEL_OPTIONS,
+  applyTurnEventToDraft,
+  buildModelCatalog,
+  type ModelOption,
+  type StreamingTurnState,
+} from './state/turn-stream';
 import {
   deriveChatTitleFromPrompt,
   selectFallbackId,
@@ -22,12 +29,15 @@ function WorkbenchApp() {
   const [chatsByProject, setChatsByProject] = useState<Readonly<Record<string, readonly ChatRecord[]>>>({});
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
   const [messages, setMessages] = useState<readonly MessageRecord[]>([]);
+  const [messageMetaById, setMessageMetaById] = useState<Readonly<Record<string, MessageTurnMeta>>>({});
   const [includeArchived, setIncludeArchived] = useState(false);
-  const [selectedModelHandle, setSelectedModelHandle] = useState('claude:opus-4-6:high');
-  const [streaming, setStreaming] = useState<StreamingDraft | null>(null);
+  const [modelOptions, setModelOptions] = useState<readonly ModelOption[]>(FALLBACK_MODEL_OPTIONS);
+  const [chatModelHandle, setChatModelHandle] = useState('claude:opus-4-6:high');
+  const [turnOverrideHandle, setTurnOverrideHandle] = useState<string | null>(null);
+  const [streaming, setStreaming] = useState<StreamingTurnState | null>(null);
   const [bridgeError, setBridgeError] = useState<string | null>(null);
 
-  const streamingRef = useRef<StreamingDraft | null>(null);
+  const streamingRef = useRef<StreamingTurnState | null>(null);
   const activeChatRef = useRef<string | null>(null);
   streamingRef.current = streaming;
   activeChatRef.current = selectedChatId;
@@ -54,8 +64,12 @@ function WorkbenchApp() {
     }
 
     try {
-      const { projects: loadedProjects } = await api.listProjects();
+      const [{ projects: loadedProjects }, { adapters }] = await Promise.all([
+        api.listProjects(),
+        api.listAdapters(),
+      ]);
       setProjects(loadedProjects);
+      setModelOptions(buildModelCatalog(adapters));
 
       const chatMap: Record<string, readonly ChatRecord[]> = {};
       await Promise.all(
@@ -100,33 +114,39 @@ function WorkbenchApp() {
         return;
       }
 
-      if (payload.event.type === 'text_delta') {
-        const nextText = `${current.text}${payload.event.text}`;
-        setStreaming({ ...current, text: nextText });
+      const nextState = applyTurnEventToDraft(current, payload.event);
+      if (payload.event.type !== 'done') {
+        setStreaming(nextState);
         return;
       }
 
-      if (payload.event.type === 'done') {
-        const finalText = current.text.trim();
-        setStreaming(null);
-        const targetChatId = activeChatRef.current;
-        if (targetChatId && finalText.length > 0) {
-          void api
-            .appendMessage({
-              chatId: targetChatId,
-              role: 'assistant',
-              providerId: current.provider,
-              modelId: current.modelId,
-              content: finalText,
-            })
-            .then(async () => {
-              const { messages: updated } = await api.listMessages(targetChatId);
-              setMessages(updated);
-              if (selectedProjectId) {
-                await refreshChatsForProject(selectedProjectId);
-              }
-            });
-        }
+      const finalText = nextState.text.trim() || nextState.rateLimitMessage || '';
+      setStreaming(null);
+      const targetChatId = activeChatRef.current;
+      if (targetChatId && finalText.length > 0) {
+        void api
+          .appendMessage({
+            chatId: targetChatId,
+            role: 'assistant',
+            providerId: nextState.provider,
+            modelId: nextState.modelId,
+            content: finalText,
+          })
+          .then(async ({ message }) => {
+            setMessageMetaById((prev) => ({
+              ...prev,
+              [message.id]: {
+                tools: nextState.tools,
+                thinking: nextState.thinking,
+                changedFiles: nextState.changedFiles,
+              },
+            }));
+            const { messages: updated } = await api.listMessages(targetChatId);
+            setMessages(updated);
+            if (selectedProjectId) {
+              await refreshChatsForProject(selectedProjectId);
+            }
+          });
       }
     });
   }, [refreshChatsForProject, selectedProjectId]);
@@ -293,12 +313,14 @@ function WorkbenchApp() {
     ]);
     setMessages(updatedMessages);
 
-    const parsed = parseModelHandle(selectedModelHandle);
+    const effectiveHandle = turnOverrideHandle ?? chatModelHandle;
+    setTurnOverrideHandle(null);
+    const parsed = parseModelHandle(effectiveHandle);
     const started = await api.startTurn({
       projectId: project.id,
       chatId: selectedChatId,
       cwd: project.rootPath,
-      modelHandle: selectedModelHandle,
+      modelHandle: effectiveHandle,
       prompt,
     });
     setStreaming({
@@ -306,6 +328,10 @@ function WorkbenchApp() {
       provider: parsed.provider,
       modelId: parsed.modelId,
       text: '',
+      thinking: '',
+      tools: [],
+      changedFiles: [],
+      rateLimitMessage: null,
     });
   };
 
@@ -352,9 +378,13 @@ function WorkbenchApp() {
         project={activeProject}
         chat={activeChat}
         messages={messages}
+        messageMetaById={messageMetaById}
         streaming={streaming}
-        selectedModelHandle={selectedModelHandle}
-        onChangeModelHandle={setSelectedModelHandle}
+        modelOptions={modelOptions}
+        chatModelHandle={chatModelHandle}
+        turnOverrideHandle={turnOverrideHandle}
+        onChangeChatModel={setChatModelHandle}
+        onChangeTurnOverride={setTurnOverrideHandle}
         onSendPrompt={handleSendPrompt}
         onCancelTurn={handleCancelTurn}
         onCreateChat={handleCreateChat}

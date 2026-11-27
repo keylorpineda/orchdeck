@@ -1,51 +1,58 @@
 import { PaperPlaneRight, Stop } from '@phosphor-icons/react';
 import { useState, type FormEvent } from 'react';
-import type {
-  ChatRecord,
-  MessageRecord,
-  ProjectWithGitStatus,
-  ProviderId,
-} from '@orchdeck/shared';
+import type { ChatRecord, MessageRecord, ProjectWithGitStatus } from '@orchdeck/shared';
+import {
+  formatModelLabel,
+  type ModelOption,
+  type StreamingTurnState,
+  type ToolActivityEntry,
+} from '../state/turn-stream';
 import { EngineMark } from './EngineMark';
+import { MarkdownContent } from './MarkdownContent';
+import { ModelPicker } from './ModelPicker';
+import { ToolActivityBlock } from './ToolActivityBlock';
 
-export interface StreamingDraft {
-  readonly turnId: string;
-  readonly provider: ProviderId;
-  readonly modelId: string;
-  readonly text: string;
+export interface MessageTurnMeta {
+  readonly tools: readonly ToolActivityEntry[];
+  readonly thinking?: string | undefined;
+  readonly changedFiles?: readonly string[] | undefined;
 }
 
 export interface ChatWorkspaceProps {
   readonly project: ProjectWithGitStatus | null;
   readonly chat: ChatRecord | null;
   readonly messages: readonly MessageRecord[];
-  readonly streaming: StreamingDraft | null;
-  readonly selectedModelHandle: string;
-  readonly onChangeModelHandle: (handle: string) => void;
+  readonly messageMetaById: Readonly<Record<string, MessageTurnMeta>>;
+  readonly streaming: StreamingTurnState | null;
+  readonly modelOptions: readonly ModelOption[];
+  readonly chatModelHandle: string;
+  readonly turnOverrideHandle: string | null;
+  readonly onChangeChatModel: (handle: string) => void;
+  readonly onChangeTurnOverride: (handle: string | null) => void;
   readonly onSendPrompt: (prompt: string) => Promise<void>;
   readonly onCancelTurn: (turnId: string) => Promise<void>;
   readonly onCreateChat: (projectId: string) => Promise<void>;
 }
 
-const DEFAULT_MODEL_OPTIONS: ReadonlyArray<{ readonly handle: string; readonly label: string }> = [
-  { handle: 'claude:opus-4-6:high', label: 'Claude Opus 4.6' },
-  { handle: 'codex:gpt-5-codex:high', label: 'GPT-5 Codex' },
-  { handle: 'antigravity:gemini-4-neon:high', label: 'Gemini 4 Neon' },
-];
-
 export function ChatWorkspace({
   project,
   chat,
   messages,
+  messageMetaById,
   streaming,
-  selectedModelHandle,
-  onChangeModelHandle,
+  modelOptions,
+  chatModelHandle,
+  turnOverrideHandle,
+  onChangeChatModel,
+  onChangeTurnOverride,
   onSendPrompt,
   onCancelTurn,
   onCreateChat,
 }: ChatWorkspaceProps) {
   const [prompt, setPrompt] = useState('');
   const [sending, setSending] = useState(false);
+
+  const effectiveHandle = turnOverrideHandle ?? chatModelHandle;
 
   if (!project) {
     return (
@@ -118,48 +125,87 @@ export function ChatWorkspace({
         </div>
       </header>
 
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-5">
         {messages.length === 0 && !streaming ? (
           <p className="m-0 text-[13px] text-ink-tertiary">
-            Thread initialized. Messages persist automatically across restarts.
+            Thread initialized. Press Ctrl+M to pick an engine and model, or Ctrl+Enter to send.
           </p>
         ) : null}
 
-        {messages.map((msg) => (
-          <article
-            key={msg.id}
-            className={
-              msg.role === 'user'
-                ? 'surface-card px-4 py-3'
-                : 'border-l-2 border-border-strong pl-4 py-1'
-            }
-          >
-            <div className="mb-1 flex items-center gap-2 text-[11.5px] text-ink-tertiary">
-              {msg.providerId ? <EngineMark provider={msg.providerId} /> : null}
-              <span className="font-medium text-ink-secondary">
-                {msg.role === 'user' ? 'You' : (msg.modelId ?? msg.providerId ?? 'Assistant')}
-              </span>
-              <span className="tabular-mono">
-                {new Date(msg.createdAt).toLocaleTimeString([], {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                })}
-              </span>
-            </div>
-            <div className="whitespace-pre-wrap text-[14px] text-ink">{msg.content}</div>
-          </article>
-        ))}
+        {messages.map((msg) => {
+          const meta = messageMetaById[msg.id];
+          const modelLabel =
+            msg.providerId && msg.modelId
+              ? formatModelLabel(`${msg.providerId}:${msg.modelId}`, modelOptions)
+              : (msg.modelId ?? msg.providerId ?? 'Assistant');
+
+          return (
+            <article
+              key={msg.id}
+              className={
+                msg.role === 'user'
+                  ? 'surface-card max-w-[68ch] px-4 py-3'
+                  : 'border-l-2 border-border-strong py-0.5 pl-4'
+              }
+            >
+              <div className="mb-1.5 flex items-center gap-2 text-[11.5px] text-ink-tertiary">
+                {msg.providerId ? <EngineMark provider={msg.providerId} /> : null}
+                <span className="font-medium text-ink-secondary">
+                  {msg.role === 'user' ? 'You' : modelLabel}
+                </span>
+                <span className="tabular-mono">
+                  {new Date(msg.createdAt).toLocaleTimeString([], {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
+                </span>
+              </div>
+
+              {msg.role === 'assistant' && meta ? (
+                <ToolActivityBlock
+                  tools={meta.tools}
+                  thinking={meta.thinking}
+                  changedFiles={meta.changedFiles}
+                />
+              ) : null}
+
+              {msg.role === 'user' ? (
+                <div className="whitespace-pre-wrap text-[14px] text-ink">{msg.content}</div>
+              ) : (
+                <MarkdownContent content={msg.content} />
+              )}
+            </article>
+          );
+        })}
 
         {streaming ? (
-          <article className="border-l-2 border-accent pl-4 py-1">
-            <div className="mb-1 flex items-center gap-2 text-[11.5px] text-ink-secondary">
+          <article className="border-l-2 border-accent py-0.5 pl-4">
+            <div className="mb-1.5 flex items-center gap-2 text-[11.5px] text-ink-secondary">
               <EngineMark provider={streaming.provider} />
-              <span className="font-medium">{streaming.modelId}</span>
+              <span className="font-medium">
+                {formatModelLabel(`${streaming.provider}:${streaming.modelId}`, modelOptions)}
+              </span>
               <span className="tabular-mono text-ink-tertiary">streaming</span>
             </div>
-            <div className="whitespace-pre-wrap text-[14px] text-ink">
-              {streaming.text || '...'}
-            </div>
+
+            <ToolActivityBlock
+              tools={streaming.tools}
+              thinking={streaming.thinking}
+              changedFiles={streaming.changedFiles}
+              defaultExpanded
+            />
+
+            {streaming.rateLimitMessage ? (
+              <div className="mb-2 rounded-[6px] bg-warn-bg px-2.5 py-1.5 text-[12px] text-warn">
+                {streaming.rateLimitMessage}
+              </div>
+            ) : null}
+
+            {streaming.text ? (
+              <MarkdownContent content={streaming.text} />
+            ) : (
+              <p className="tabular-mono m-0 text-[12px] text-ink-tertiary">Awaiting output...</p>
+            )}
           </article>
         ) : null}
       </div>
@@ -179,18 +225,13 @@ export function ChatWorkspace({
           className="w-full resize-none border-0 bg-transparent text-[14px] text-ink outline-none placeholder:text-ink-tertiary"
         />
         <div className="mt-2 flex items-center justify-between border-t border-border-subtle pt-2">
-          <select
-            value={selectedModelHandle}
-            onChange={(e) => onChangeModelHandle(e.target.value)}
-            aria-label="Select engine and model"
-            className="tabular-mono rounded-[6px] border border-border-subtle bg-inset px-2 py-1 text-[11.5px] text-ink outline-none focus:border-accent"
-          >
-            {DEFAULT_MODEL_OPTIONS.map((opt) => (
-              <option key={opt.handle} value={opt.handle}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
+          <ModelPicker
+            options={modelOptions}
+            selectedHandle={effectiveHandle}
+            isTurnOverride={turnOverrideHandle !== null}
+            onSelectChatModel={onChangeChatModel}
+            onSelectTurnOverride={onChangeTurnOverride}
+          />
 
           {streaming ? (
             <button
