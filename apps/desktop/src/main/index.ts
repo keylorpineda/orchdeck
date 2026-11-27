@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 import {
   isProviderId,
   type AgentRole,
@@ -8,7 +8,7 @@ import {
   type MessageRole,
   type ProviderId,
 } from '@orchdeck/shared';
-import { app, BrowserWindow, dialog, ipcMain, net, protocol, session, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, protocol, session, shell } from 'electron';
 import { DaemonSupervisor } from './daemon-supervisor.js';
 import {
   PRODUCTION_CSP,
@@ -922,6 +922,18 @@ function registerIpcHandlers(): void {
   });
 }
 
+const RENDERER_MIME_TYPES: Readonly<Record<string, string>> = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.mjs': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.woff2': 'font/woff2',
+  '.woff': 'font/woff',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+};
+
 function registerRendererProtocol(): void {
   const rendererRoot = path.resolve(__dirname, '../renderer');
 
@@ -949,13 +961,15 @@ function registerRendererProtocol(): void {
       return new Response('Not Found', { status: 404 });
     }
 
-    const fetched = await net.fetch(pathToFileURL(candidatePath).toString());
-    const headers = new Headers(fetched.headers);
-    headers.set('Content-Security-Policy', PRODUCTION_CSP);
-    return new Response(fetched.body, {
-      status: fetched.status,
-      statusText: fetched.statusText,
-      headers,
+    const body = await fs.promises.readFile(candidatePath);
+    const ext = path.extname(candidatePath).toLowerCase();
+    const contentType = RENDERER_MIME_TYPES[ext] ?? 'application/octet-stream';
+    return new Response(body, {
+      status: 200,
+      headers: {
+        'Content-Type': contentType,
+        'Content-Security-Policy': PRODUCTION_CSP,
+      },
     });
   });
 }
@@ -1005,6 +1019,14 @@ function createMainWindow(): BrowserWindow {
     process.stderr.write(
       `Renderer failed to load (${String(errorCode)}): ${errorDescription} [${validatedUrl}]\n`,
     );
+  });
+
+  win.webContents.on('console-message', (event) => {
+    if (event.level === 'warning' || event.level === 'error') {
+      process.stderr.write(
+        `[renderer:${event.level}] ${event.message} (${event.sourceId}:${String(event.lineNumber)})\n`,
+      );
+    }
   });
 
   win.on('closed', () => {
