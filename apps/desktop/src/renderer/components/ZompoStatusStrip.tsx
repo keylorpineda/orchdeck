@@ -1,0 +1,60 @@
+import { useEffect, useState } from 'react';
+import { getZompoStatusPhrase, type ZompoMoodState } from '../state/i18n';
+import { useLanguage } from './LanguageProvider';
+import { PixelStepTrack } from './PixelGlyphs';
+import { ZompoMascot } from './ZompoMascot';
+
+export interface ZompoStatusStripProps {
+  readonly mood: ZompoMoodState;
+  readonly detailLabel?: string | undefined;
+}
+
+export function ZompoStatusStrip({ mood, detailLabel }: ZompoStatusStripProps) {
+  const { locale } = useLanguage();
+  const [frame, setFrame] = useState(0);
+
+  useEffect(() => {
+    if (mood !== 'working') {
+      return;
+    }
+    const prefersReduced =
+      typeof window !== 'undefined' &&
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (prefersReduced) {
+      return;
+    }
+
+    const timer = setInterval(() => {
+      setFrame((prev) => prev + 1);
+    }, 450);
+    return () => {
+      clearInterval(timer);
+    };
+  }, [mood]);
+
+  // Rotate bilingual cooking/working phrases smoothly every ~2.7s (every 6 stepped frames)
+  const phraseTick = Math.floor(frame / 6);
+  const phrase = getZompoStatusPhrase(locale, mood, phraseTick);
+
+  return (
+    <div
+      className="surface-card pixel-frame flex items-center justify-between gap-3 px-3 py-2 text-[12px]"
+      aria-live="polite"
+    >
+      <div className="flex min-w-0 items-center gap-2.5">
+        <ZompoMascot mood={mood} frame={frame} size={24} />
+        <div className="flex min-w-0 flex-col">
+          <span className="truncate font-medium text-ink">{phrase}</span>
+          {detailLabel ? (
+            <span className="tabular-mono truncate text-[10.5px] text-ink-tertiary">
+              {detailLabel}
+            </span>
+          ) : null}
+        </div>
+      </div>
+
+      <PixelStepTrack active={mood === 'working'} frame={frame} />
+    </div>
+  );
+}

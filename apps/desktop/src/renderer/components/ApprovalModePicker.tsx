@@ -6,6 +6,8 @@ import {
   cycleV01ApprovalMode,
   getApprovalModeMeta,
 } from '../state/approval-mode';
+import { useLanguage } from './LanguageProvider';
+import { PixelGlyph } from './PixelGlyphs';
 
 export interface ApprovalModePickerProps {
   readonly mode: ApprovalMode;
@@ -15,6 +17,7 @@ export interface ApprovalModePickerProps {
 
 export function ApprovalModePicker({ mode, onChangeMode, disabled }: ApprovalModePickerProps) {
   const [open, setOpen] = useState(false);
+  const { dict } = useLanguage();
   const currentMeta = getApprovalModeMeta(mode);
 
   useEffect(() => {
@@ -91,8 +94,9 @@ export function ApprovalModePicker({ mode, onChangeMode, disabled }: ApprovalMod
               );
             })}
           </div>
-          <div className="border-t border-border-subtle bg-inset px-3 py-1.5 text-[11px] text-ink-tertiary">
-            No mode writes to main
+          <div className="flex items-center gap-1.5 border-t border-border-subtle bg-inset px-3 py-1.5 text-[11px] text-ink-tertiary">
+            <PixelGlyph name="shield-main" size={11} />
+            <span>{dict.noModeWritesMain}</span>
           </div>
         </div>
       ) : null}

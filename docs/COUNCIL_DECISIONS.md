@@ -59,3 +59,24 @@ After discarding initial candidates with existing GitHub/agent-tool collisions o
 
 ### G. `v0.1` Multi-Engine Scope
 - **Decision:** `v0.1` ships with the **common adapter contract across all 3 engines** (Claude Tier 1, Codex Tier 1, Antigravity Tier 1/Beta depending on exposed CLI flags) so Orchdeck delivers its core multi-engine promise immediately rather than launching as a single-CLI wrapper. Parallel worktrees, plugin UI, inline diff comments, and quota UI follow in `v0.2`–`v0.3`.
+
+---
+
+## 3. Mascot & Editorial Pixel-Art Decision: **Zompo**
+
+Convened through a 3-advisor Council (Systems Architect, Staff Product Designer, and Costa Rican Cultural Strategist) to design a completely original, Costa Rica-inspired pixel-art critter mascot with zero tourist clichés and crisp legibility at `14px`–`28px` across both *Paper & Ink* and *Graphite & Vermilion*.
+
+### Ranked-Choice Vote (`#1 = 3 pts`, `#2 = 2 pts`, `#3 = 1 pt`)
+
+| Candidate | Advisor 1 (Systems Architect) | Advisor 2 (Product Designer) | Advisor 3 (Cultural Strategist) | Total |
+| :--- | :---: | :---: | :---: | :---: |
+| **Zompo** *(Leafcutter Ant / Zompopa)* | #1 (3 pts) | #2 (2 pts) | #1 (3 pts) | **8 pts (Winner)** |
+| **Pumi** *(Blue-Jeans Dart Frog)* | #2 (2 pts) | #1 (3 pts) | #2 (2 pts) | **7 pts** |
+| **Vitro** *(Glass Frog)* | #3 (1 pt) | — | #3 (1 pt) | **2 pts** |
+| **Ketz** *(Blocky Quetzal)* | — | #3 (1 pt) | — | **1 pt** |
+
+**Why `Zompo` won:**
+- The Costa Rican *zompopa* (leafcutter ant) is nature's parallel multi-agent orchestrator: disciplined worker trails slicing precision pieces and carrying discrete payloads without jamming the main trail.
+- Maps directly onto Orchdeck's palette and core **Change Card** metaphor: a vermilion chassis (`--accent`) with slate-dark antennae (`--engine-antigravity` / `--text-primary`) hoisting a moss leaf-card (`--pass-text`).
+- Rendered exclusively from integer-snapped `16x14` SVG `<rect>` blocks (`shape-rendering: crispEdges`) paired with restrained editorial pixel-art details (stepped hairlines, corner tick frames, and an 8-block stepped work track — zero anxious bounce/pulse animations).
+- Bilingual (`EN` / `ES`) working phrases reflect authentic software craft and subtle Costa Rican idioms (`"Zompo está cocinando..."`, `"Zompo está jalando diffs..."`, `"Zompo está chorreando un patch..."`).

@@ -71,3 +71,26 @@
   transition-duration: 120ms;
   transition-timing-function: cubic-bezier(0.2, 0, 0, 1);
 }
+
+.pixel-crisp {
+  shape-rendering: crispEdges;
+  image-rendering: pixelated;
+}
+
+.pixel-rule {
+  height: 2px;
+  background-image: repeating-linear-gradient(
+    to right,
+    var(--border-strong) 0,
+    var(--border-strong) 4px,
+    transparent 4px,
+    transparent 8px
+  );
+}
+
+.pixel-frame {
+  box-shadow:
+    inset 2px 0 0 0 var(--border-strong),
+    inset -2px 0 0 0 var(--border-strong),
+    var(--surface-highlight);
+}

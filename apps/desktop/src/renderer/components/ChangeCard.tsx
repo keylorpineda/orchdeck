@@ -15,6 +15,8 @@ import {
   formatInlineCommentsPrompt,
   type InlineDiffComment,
 } from '../state/inline-comments';
+import { useLanguage } from './LanguageProvider';
+import { PixelGlyph } from './PixelGlyphs';
 import { ShikiDiffView } from './ShikiDiffView';
 
 export interface ChangeCardProps {
@@ -86,6 +88,7 @@ export function ChangeCard({
   onIntegrateBranch,
   onRequestChanges,
 }: ChangeCardProps) {
+  const { dict } = useLanguage();
   const [expandedFiles, setExpandedFiles] = useState<Readonly<Record<string, boolean>>>({});
   const [showTestOutput, setShowTestOutput] = useState(false);
   const [commitMessage, setCommitMessage] = useState('');
@@ -153,12 +156,13 @@ export function ChangeCard({
     <section className="surface-card overflow-hidden" aria-label="Change Card">
       <div className="flex min-h-[38px] flex-wrap items-center justify-between gap-2 border-b border-border-subtle bg-inset px-3 py-1.5">
         <div className="flex items-center gap-2.5">
+          <PixelGlyph name="leaf-card" size={12} />
           <span className="text-[12px] font-medium text-ink">
             {loading
-              ? 'Inspecting working tree...'
+              ? dict.inspectingTree
               : isClean
-                ? 'Working tree clean'
-                : `${files.length} ${files.length === 1 ? 'file' : 'files'} changed`}
+                ? dict.workingTreeClean
+                : `${files.length} ${files.length === 1 ? dict.fileChangedSuffix : dict.filesChangedSuffix}`}
           </span>
           <span className="tabular-mono rounded-[4px] border border-border-subtle bg-surface px-1.5 py-0.5 text-[11px] text-ink-secondary">
             {activeBranch}
@@ -196,7 +200,7 @@ export function ChangeCard({
               className="orch-transition inline-flex items-center gap-1 rounded-[4px] border border-border-subtle bg-surface px-2 py-0.5 text-[11.5px] text-ink-secondary hover:border-border-strong hover:text-ink disabled:opacity-50"
             >
               <Flask size={12} weight="regular" />
-              Run Tests
+              {dict.runTests}
             </button>
           ) : null}
 
@@ -346,7 +350,7 @@ export function ChangeCard({
                   className="orch-transition inline-flex items-center gap-1.5 rounded-[6px] border border-accent bg-accent px-3 py-1 text-[12px] font-medium text-surface hover:border-accent-hover hover:bg-accent-hover disabled:opacity-50"
                 >
                   <Check size={13} weight="regular" />
-                  {committing ? 'Committing...' : 'Approve & Commit'}
+                  {committing ? dict.committing : dict.approveCommit}
                 </button>
 
                 <button
@@ -363,15 +367,15 @@ export function ChangeCard({
                 >
                   <ChatCircleText size={13} weight="regular" />
                   {inlineComments.length > 0
-                    ? `Request Changes (${inlineComments.length})`
-                    : 'Request Changes'}
+                    ? `${dict.requestChanges} (${inlineComments.length})`
+                    : dict.requestChanges}
                 </button>
               </div>
 
               {confirmDiscard ? (
                 <div className="flex items-center gap-1.5">
                   <span className="text-[11.5px] text-ink-secondary">
-                    Stash backup & revert?
+                    {dict.confirmingDiscard}
                   </span>
                   <button
                     type="button"
@@ -379,14 +383,14 @@ export function ChangeCard({
                     onClick={handleConfirmDiscard}
                     className="orch-transition rounded-[6px] border border-fail bg-fail-bg px-2.5 py-1 text-[11.5px] font-medium text-fail disabled:opacity-50"
                   >
-                    {discarding ? 'Discarding...' : 'Confirm Discard'}
+                    {discarding ? dict.discard : dict.confirmDiscard}
                   </button>
                   <button
                     type="button"
                     onClick={() => setConfirmDiscard(false)}
                     className="orch-transition rounded-[6px] border border-border-subtle bg-surface px-2 py-1 text-[11.5px] text-ink-secondary hover:text-ink"
                   >
-                    Cancel
+                    {dict.cancel}
                   </button>
                 </div>
               ) : (
@@ -397,7 +401,7 @@ export function ChangeCard({
                   className="orch-transition inline-flex items-center gap-1 rounded-[6px] border border-border-subtle bg-surface px-2.5 py-1 text-[12px] text-fail hover:border-fail disabled:opacity-50"
                 >
                   <Trash size={13} weight="regular" />
-                  Discard
+                  {dict.discard}
                 </button>
               )}
             </div>

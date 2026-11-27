@@ -21,6 +21,7 @@ import {
   type UsageSummaryResult,
 } from '@orchdeck/shared';
 import { ChatWorkspace, type MessageTurnMeta } from './components/ChatWorkspace';
+import { LanguageProvider } from './components/LanguageProvider';
 import { ProjectSidebar } from './components/ProjectSidebar';
 import { ThemeProvider } from './components/ThemeProvider';
 import { UsageQuotaRadar } from './components/UsageQuotaRadar';
@@ -931,7 +932,9 @@ function WorkbenchApp() {
 export function App() {
   return (
     <ThemeProvider>
-      <WorkbenchApp />
+      <LanguageProvider>
+        <WorkbenchApp />
+      </LanguageProvider>
     </ThemeProvider>
   );
 }
