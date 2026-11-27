@@ -5,18 +5,35 @@ import {
   CO_AUTHOR_REGEX,
   EMOJI_CHAR_REGEX,
   EMOJI_SHORTCODE_REGEX,
-} from './governance-constants.mjs';
+} from './governance-constants.ts';
 
-const prTitle = (process.env.PR_TITLE ?? '').trim();
-const prBody = process.env.PR_BODY ?? '';
-const baseRef = (process.env.PR_BASE_REF ?? '').trim();
-const headRef = (process.env.PR_HEAD_REF ?? '').trim();
+const prTitle = (process.env['PR_TITLE'] ?? '').trim();
+const prBody = process.env['PR_BODY'] ?? '';
+const baseRef = (process.env['PR_BASE_REF'] ?? '').trim();
+const headRef = (process.env['PR_HEAD_REF'] ?? '').trim();
 
-const errors = [];
+const errors: string[] = [];
 
-const TITLE_REGEX = new RegExp(
-  `^(${ALLOWED_TYPES.join('|')})\\(([a-z0-9-]+)\\): (.+)$`,
-);
+const TITLE_REGEX = new RegExp(`^(${ALLOWED_TYPES.join('|')})\\(([a-z0-9-]+)\\): (.+)$`);
+
+function stripHtmlComments(text: string): string {
+  let result = '';
+  let cursor = 0;
+  while (cursor < text.length) {
+    const start = text.indexOf('<!--', cursor);
+    if (start === -1) {
+      result += text.slice(cursor);
+      break;
+    }
+    result += text.slice(cursor, start);
+    const end = text.indexOf('-->', start + 4);
+    if (end === -1) {
+      break;
+    }
+    cursor = end + 3;
+  }
+  return result.trim();
+}
 
 if (!prTitle) {
   errors.push('PR title must not be empty.');
@@ -34,7 +51,8 @@ if (!prTitle) {
       `PR title must follow "<type>(<scope>): <imperative lowercase summary>". Allowed types: ${ALLOWED_TYPES.join(', ')}.`,
     );
   } else {
-    const [, , scope, subject] = match;
+    const scope = match[2] ?? '';
+    const subject = match[3] ?? '';
     if (!ALLOWED_SCOPES.includes(scope)) {
       errors.push(
         `PR title scope "${scope}" is not allowed. Allowed scopes: ${ALLOWED_SCOPES.join(', ')}.`,
@@ -50,25 +68,6 @@ if (!prTitle) {
       errors.push('PR title subject must not end with a period.');
     }
   }
-}
-
-function stripHtmlComments(text) {
-  let result = '';
-  let cursor = 0;
-  while (cursor < text.length) {
-    const start = text.indexOf('<!--', cursor);
-    if (start === -1) {
-      result += text.slice(cursor);
-      break;
-    }
-    result += text.slice(cursor, start);
-    const end = text.indexOf('-->', start + 4);
-    if (end === -1) {
-      break;
-    }
-    cursor = end + 3;
-  }
-  return result.trim();
 }
 
 const strippedBody = stripHtmlComments(prBody);
@@ -102,9 +101,7 @@ if (CO_AUTHOR_REGEX.test(prBody) || AI_ATTRIBUTION_REGEX.test(prBody)) {
 
 if (baseRef === 'main') {
   const allowedToMain =
-    headRef === 'dev' ||
-    headRef.startsWith('hotfix/') ||
-    headRef.startsWith('release/');
+    headRef === 'dev' || headRef.startsWith('hotfix/') || headRef.startsWith('release/');
   if (!allowedToMain) {
     errors.push(
       `Pull Requests targeting "main" may only come from "dev", "hotfix/*", or "release/*" (got "${headRef}"). Target "dev" for regular integration.`,

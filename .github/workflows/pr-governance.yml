@@ -43,7 +43,7 @@ jobs:
           PR_BODY: ${{ github.event.pull_request.body }}
           PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
           PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
-        run: node scripts/check-pr-governance.mjs
+        run: node scripts/check-pr-governance.ts
 
       - name: Validate commit messages with commitlint
         run: pnpm exec commitlint --from "${{ github.event.pull_request.base.sha }}" --to "${{ github.event.pull_request.head.sha }}"
