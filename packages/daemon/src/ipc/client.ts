@@ -2,10 +2,12 @@ import net from 'node:net';
 import {
   JSONRPC_VERSION,
   isJsonRpcErrorResponse,
+  isJsonRpcNotification,
   isJsonRpcResponse,
   type DaemonMethod,
   type DaemonMethodMap,
   type JsonRpcId,
+  type JsonRpcNotification,
   type JsonRpcRequest,
 } from '@orchdeck/shared';
 
@@ -20,6 +22,8 @@ export interface DaemonRpcClientOptions {
   readonly authToken: string;
   readonly timeoutMs?: number | undefined;
 }
+
+export type NotificationListener = (notification: JsonRpcNotification) => void;
 
 export class JsonRpcClientError extends Error {
   readonly code: number;
@@ -36,6 +40,7 @@ export class DaemonRpcClient {
   private readonly authToken: string;
   private readonly timeoutMs: number;
   private readonly pending = new Map<JsonRpcId, PendingCall>();
+  private readonly notificationListeners = new Set<NotificationListener>();
   private socket: net.Socket | null = null;
   private nextId = 1;
   private buffer = '';
@@ -44,6 +49,13 @@ export class DaemonRpcClient {
     this.socketPath = options.socketPath;
     this.authToken = options.authToken;
     this.timeoutMs = options.timeoutMs ?? 10_000;
+  }
+
+  onNotification(listener: NotificationListener): () => void {
+    this.notificationListeners.add(listener);
+    return () => {
+      this.notificationListeners.delete(listener);
+    };
   }
 
   async connect(authenticate = true): Promise<void> {
@@ -83,7 +95,7 @@ export class DaemonRpcClient {
         const line = this.buffer.slice(0, newlineIndex).trim();
         this.buffer = this.buffer.slice(newlineIndex + 1);
         if (line.length > 0) {
-          this.handleResponseLine(line);
+          this.handleMessageLine(line);
         }
         newlineIndex = this.buffer.indexOf('\n');
       }
@@ -99,11 +111,18 @@ export class DaemonRpcClient {
     });
   }
 
-  private handleResponseLine(line: string): void {
+  private handleMessageLine(line: string): void {
     let parsed: unknown;
     try {
       parsed = JSON.parse(line);
     } catch {
+      return;
+    }
+
+    if (isJsonRpcNotification(parsed)) {
+      for (const listener of this.notificationListeners) {
+        listener(parsed);
+      }
       return;
     }
 
@@ -163,6 +182,7 @@ export class DaemonRpcClient {
   }
 
   close(): void {
+    this.notificationListeners.clear();
     this.rejectAllPending(new Error('DaemonRpcClient closed by caller.'));
     if (this.socket && !this.socket.destroyed) {
       this.socket.end();

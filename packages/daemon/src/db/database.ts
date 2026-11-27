@@ -11,6 +11,28 @@ export interface CreateProjectInput {
   readonly defaultBranch?: string | undefined;
 }
 
+export interface RecordUsageEventInput {
+  readonly providerId: string;
+  readonly modelId: string;
+  readonly inputTokens: number;
+  readonly outputTokens: number;
+  readonly cacheReadTokens: number;
+  readonly durationMs: number;
+  readonly rateLimited: boolean;
+}
+
+export interface UsageEventRecord {
+  readonly id: string;
+  readonly providerId: string;
+  readonly modelId: string;
+  readonly inputTokens: number;
+  readonly outputTokens: number;
+  readonly cacheReadTokens: number;
+  readonly durationMs: number;
+  readonly rateLimited: boolean;
+  readonly createdAt: string;
+}
+
 export class DaemonDatabase {
   readonly dbPath: string;
   private readonly db: DatabaseSync;
@@ -147,6 +169,71 @@ export class DaemonDatabase {
       defaultBranch: String(row['default_branch'] ?? 'main'),
       createdAt: String(row['created_at'] ?? ''),
       updatedAt: String(row['updated_at'] ?? ''),
+    }));
+  }
+
+  recordUsageEvent(input: RecordUsageEventInput): UsageEventRecord {
+    const id = crypto.randomUUID();
+    const now = new Date().toISOString();
+    const rateLimitedInt = input.rateLimited ? 1 : 0;
+
+    this.db
+      .prepare(
+        `
+        INSERT INTO usage_events (
+          id, provider_id, model_id, input_tokens, output_tokens,
+          cache_read_tokens, duration_ms, rate_limited, created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+      )
+      .run(
+        id,
+        input.providerId,
+        input.modelId,
+        input.inputTokens,
+        input.outputTokens,
+        input.cacheReadTokens,
+        input.durationMs,
+        rateLimitedInt,
+        now,
+      );
+
+    return {
+      id,
+      providerId: input.providerId,
+      modelId: input.modelId,
+      inputTokens: input.inputTokens,
+      outputTokens: input.outputTokens,
+      cacheReadTokens: input.cacheReadTokens,
+      durationMs: input.durationMs,
+      rateLimited: input.rateLimited,
+      createdAt: now,
+    };
+  }
+
+  listUsageEvents(): UsageEventRecord[] {
+    const rows = this.db
+      .prepare(
+        `
+        SELECT id, provider_id, model_id, input_tokens, output_tokens,
+               cache_read_tokens, duration_ms, rate_limited, created_at
+        FROM usage_events
+        ORDER BY created_at DESC
+        `,
+      )
+      .all() as Array<Record<string, unknown>>;
+
+    return rows.map((row) => ({
+      id: String(row['id'] ?? ''),
+      providerId: String(row['provider_id'] ?? ''),
+      modelId: String(row['model_id'] ?? ''),
+      inputTokens: Number(row['input_tokens'] ?? 0),
+      outputTokens: Number(row['output_tokens'] ?? 0),
+      cacheReadTokens: Number(row['cache_read_tokens'] ?? 0),
+      durationMs: Number(row['duration_ms'] ?? 0),
+      rateLimited: Number(row['rate_limited'] ?? 0) === 1,
+      createdAt: String(row['created_at'] ?? ''),
     }));
   }
 

@@ -1,5 +1,6 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import type { AgentRole, ApprovalMode } from '@orchdeck/shared';
 import { app, BrowserWindow, ipcMain, session, shell } from 'electron';
 import { DaemonSupervisor } from './daemon-supervisor.js';
 import {
@@ -14,6 +15,22 @@ const __dirname = path.dirname(__filename);
 const supervisor = new DaemonSupervisor({
   dataDir: path.join(app.getPath('userData'), 'daemon-data'),
 });
+
+let mainWindow: BrowserWindow | null = null;
+
+function isOptionalRole(value: unknown): value is AgentRole | undefined {
+  return value === undefined || value === 'planner' || value === 'builder' || value === 'reviewer';
+}
+
+function isOptionalApprovalMode(value: unknown): value is ApprovalMode | undefined {
+  return (
+    value === undefined ||
+    value === 'plan' ||
+    value === 'architect' ||
+    value === 'express' ||
+    value === 'branch_pilot'
+  );
+}
 
 function registerIpcHandlers(): void {
   ipcMain.handle('orchdeck:health', async () => {
@@ -36,6 +53,53 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('orchdeck:projects-list', async () => {
     return supervisor.getClient().call('projects.list', {});
+  });
+
+  ipcMain.handle('orchdeck:adapters-list', async () => {
+    return supervisor.getClient().call('adapters.list', {});
+  });
+
+  ipcMain.handle('orchdeck:turn-start', async (_event, rawParams: unknown) => {
+    if (typeof rawParams !== 'object' || rawParams === null) {
+      throw new Error('Invalid params object for orchdeck:turn-start.');
+    }
+    const params = rawParams as Record<string, unknown>;
+    const projectId = params['projectId'];
+    const chatId = params['chatId'];
+    const cwd = params['cwd'];
+    const modelHandle = params['modelHandle'];
+    const prompt = params['prompt'];
+    const role = params['role'];
+    const approvalMode = params['approvalMode'];
+
+    if (
+      typeof projectId !== 'string' ||
+      typeof chatId !== 'string' ||
+      typeof cwd !== 'string' ||
+      typeof modelHandle !== 'string' ||
+      typeof prompt !== 'string' ||
+      !isOptionalRole(role) ||
+      !isOptionalApprovalMode(approvalMode)
+    ) {
+      throw new Error('Invalid arguments for orchdeck:turn-start.');
+    }
+
+    return supervisor.getClient().call('turn.start', {
+      projectId,
+      chatId,
+      cwd,
+      modelHandle,
+      prompt,
+      role,
+      approvalMode,
+    });
+  });
+
+  ipcMain.handle('orchdeck:turn-cancel', async (_event, turnId: unknown) => {
+    if (typeof turnId !== 'string' || turnId.length === 0) {
+      throw new Error('Invalid turnId argument for orchdeck:turn-cancel.');
+    }
+    return supervisor.getClient().call('turn.cancel', { turnId });
   });
 }
 
@@ -66,6 +130,12 @@ function createMainWindow(): BrowserWindow {
     webPreferences: createSecureWebPreferences(preloadPath),
   });
 
+  win.on('closed', () => {
+    if (mainWindow === win) {
+      mainWindow = null;
+    }
+  });
+
   win.webContents.setWindowOpenHandler((details) => {
     if (isAllowedExternalUrl(details.url)) {
       void shell.openExternal(details.url);
@@ -91,13 +161,19 @@ function createMainWindow(): BrowserWindow {
     void win.loadFile(path.join(__dirname, '../renderer/index.html'));
   }
 
+  mainWindow = win;
   return win;
 }
 
 async function bootstrap(): Promise<void> {
   await app.whenReady();
   configureSecurityHeaders();
-  await supervisor.start();
+  const client = await supervisor.start();
+  client.onNotification((notification) => {
+    if (notification.method === 'turn.event' && mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('orchdeck:turn-event', notification.params);
+    }
+  });
   registerIpcHandlers();
   createMainWindow();
 

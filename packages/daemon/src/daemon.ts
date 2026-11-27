@@ -1,5 +1,9 @@
 import crypto from 'node:crypto';
 import path from 'node:path';
+import type { ProviderAdapter } from '@orchdeck/shared';
+import { AdapterRegistry } from './adapters/adapter-registry.js';
+import { createDefaultMockAdapters } from './adapters/mock-adapter.js';
+import { TurnRunner } from './adapters/turn-runner.js';
 import { DaemonDatabase } from './db/database.js';
 import { DaemonRpcServer } from './ipc/server.js';
 import { resolveDefaultDataDir, resolveSocketPath } from './ipc/socket-path.js';
@@ -9,6 +13,7 @@ export interface StartDaemonOptions {
   readonly dbPath?: string | undefined;
   readonly socketPath?: string | undefined;
   readonly authToken?: string | undefined;
+  readonly adapters?: readonly ProviderAdapter[] | undefined;
 }
 
 export interface RunningDaemon {
@@ -26,10 +31,23 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Run
   const authToken = options.authToken ?? crypto.randomBytes(32).toString('hex');
 
   const db = new DaemonDatabase(dbPath);
-  const server = new DaemonRpcServer({
+  const registry = new AdapterRegistry(options.adapters ?? createDefaultMockAdapters());
+
+  let server: DaemonRpcServer | null = null;
+  const turnRunner = new TurnRunner({
+    registry,
+    db,
+    emitEvent: (notification) => {
+      server?.broadcastNotification('turn.event', notification);
+    },
+  });
+
+  server = new DaemonRpcServer({
     db,
     socketPath,
     authToken,
+    registry,
+    turnRunner,
   });
 
   try {
