@@ -32,6 +32,8 @@ import type { DaemonDatabase } from '../db/database.js';
 import type { RecipeOrchestrator } from '../fusion/recipe-orchestrator.js';
 import type { SecondOpinionOrchestrator } from '../fusion/second-opinion-orchestrator.js';
 import { GitService } from '../git/git-service.js';
+import { WorktreeManager } from '../git/worktree-manager.js';
+import { ProviderCooldownTracker, buildUsageSummaryWithRadar } from '../usage/quota-radar.js';
 
 const MAX_LINE_BYTES = 1024 * 1024;
 
@@ -44,6 +46,8 @@ export interface DaemonRpcServerOptions {
   readonly taskRunOrchestrator?: TaskRunOrchestrator | undefined;
   readonly recipeOrchestrator?: RecipeOrchestrator | undefined;
   readonly secondOpinionOrchestrator?: SecondOpinionOrchestrator | undefined;
+  readonly cooldownTracker?: ProviderCooldownTracker | undefined;
+  readonly worktreeManager?: WorktreeManager | undefined;
   readonly gitService?: GitService | undefined;
   readonly startedAtMs?: number | undefined;
 }
@@ -114,6 +118,8 @@ export class DaemonRpcServer {
   private readonly taskRunOrchestrator: TaskRunOrchestrator | undefined;
   private readonly recipeOrchestrator: RecipeOrchestrator | undefined;
   private readonly secondOpinionOrchestrator: SecondOpinionOrchestrator | undefined;
+  private readonly cooldownTracker: ProviderCooldownTracker | undefined;
+  private readonly worktreeManager: WorktreeManager;
   private readonly gitService: GitService;
   private readonly startedAtMs: number;
   private readonly server: net.Server;
@@ -132,7 +138,9 @@ export class DaemonRpcServer {
     this.taskRunOrchestrator = options.taskRunOrchestrator;
     this.recipeOrchestrator = options.recipeOrchestrator;
     this.secondOpinionOrchestrator = options.secondOpinionOrchestrator;
+    this.cooldownTracker = options.cooldownTracker;
     this.gitService = options.gitService ?? new GitService();
+    this.worktreeManager = options.worktreeManager ?? new WorktreeManager(this.gitService);
     this.startedAtMs = options.startedAtMs ?? Date.now();
     this.server = net.createServer((socket) => {
       this.handleConnection(socket);
@@ -206,6 +214,17 @@ export class DaemonRpcServer {
         socket.write(serialized);
       }
     }
+  }
+
+  private resolveRepoWorkingDir(project: ProjectRecord, chatIdRaw: unknown): string {
+    if (typeof chatIdRaw !== 'string' || chatIdRaw.length === 0) {
+      return project.rootPath;
+    }
+    const chat = this.db.getChat(chatIdRaw);
+    if (chat && chat.projectId === project.id && chat.worktreePath && fs.existsSync(chat.worktreePath)) {
+      return chat.worktreePath;
+    }
+    return project.rootPath;
   }
 
   private async enrichProjectWithGitStatus(
@@ -454,11 +473,17 @@ export class DaemonRpcServer {
           const id = params['id'];
           const name = params['name'];
           const testCommand = params['testCommand'];
+          const allowlistRaw = params['worktreeAllowlist'];
+          const setupCommandRaw = params['worktreeSetupCommand'];
           if (
             typeof id !== 'string' ||
             id.length === 0 ||
             (name !== undefined && typeof name !== 'string') ||
-            (testCommand !== undefined && testCommand !== null && typeof testCommand !== 'string')
+            (testCommand !== undefined && testCommand !== null && typeof testCommand !== 'string') ||
+            (allowlistRaw !== undefined && !Array.isArray(allowlistRaw)) ||
+            (setupCommandRaw !== undefined &&
+              setupCommandRaw !== null &&
+              typeof setupCommandRaw !== 'string')
           ) {
             return makeErrorResponse(
               request.id,
@@ -466,7 +491,15 @@ export class DaemonRpcServer {
               'projects.update requires a valid project id.',
             );
           }
-          const updated = this.db.updateProject(id, { name, testCommand });
+          const worktreeAllowlist = Array.isArray(allowlistRaw)
+            ? allowlistRaw.filter((entry): entry is string => typeof entry === 'string')
+            : undefined;
+          const updated = this.db.updateProject(id, {
+            name,
+            testCommand,
+            worktreeAllowlist,
+            worktreeSetupCommand: setupCommandRaw,
+          });
           const enriched = await this.enrichProjectWithGitStatus(updated);
           return makeSuccessResponse(request.id, { project: enriched });
         }
@@ -697,7 +730,8 @@ export class DaemonRpcServer {
               `Project not found: ${projectId}`,
             );
           }
-          const snapshot = await this.gitService.getChangeCardSnapshot(project.rootPath);
+          const targetDir = this.resolveRepoWorkingDir(project, params['chatId']);
+          const snapshot = await this.gitService.getChangeCardSnapshot(targetDir);
           return makeSuccessResponse(request.id, { snapshot });
         }
 
@@ -725,7 +759,8 @@ export class DaemonRpcServer {
               `Project "${project.name}" does not have a configured test command.`,
             );
           }
-          const result = await this.gitService.runProjectTests(project.rootPath, project.testCommand);
+          const targetDir = this.resolveRepoWorkingDir(project, params['chatId']);
+          const result = await this.gitService.runProjectTests(targetDir, project.testCommand);
           return makeSuccessResponse(request.id, { result });
         }
 
@@ -754,12 +789,13 @@ export class DaemonRpcServer {
               `Project not found: ${projectId}`,
             );
           }
+          const targetDir = this.resolveRepoWorkingDir(project, params['chatId']);
           const branch = await this.gitService.ensureTaskBranch(
-            project.rootPath,
+            targetDir,
             branchSlug?.trim() || `review-${Date.now()}`,
           );
           const commitSha = await this.gitService.commitApprovedChanges(
-            project.rootPath,
+            targetDir,
             commitMessage,
           );
           return makeSuccessResponse(request.id, { branch, commitSha });
@@ -782,7 +818,8 @@ export class DaemonRpcServer {
               `Project not found: ${projectId}`,
             );
           }
-          const discardResult = await this.gitService.discardChangesWithBackup(project.rootPath);
+          const targetDir = this.resolveRepoWorkingDir(project, params['chatId']);
+          const discardResult = await this.gitService.discardChangesWithBackup(targetDir);
           return makeSuccessResponse(request.id, discardResult);
         }
 
@@ -893,14 +930,26 @@ export class DaemonRpcServer {
 
         case 'usage.summary': {
           const providerId = params['providerId'];
-          if (providerId !== undefined && (typeof providerId !== 'string' || !isProviderId(providerId))) {
+          const includeLocalLogs = params['includeLocalLogs'];
+          if (
+            (providerId !== undefined && (typeof providerId !== 'string' || !isProviderId(providerId))) ||
+            (includeLocalLogs !== undefined && typeof includeLocalLogs !== 'boolean')
+          ) {
             return makeErrorResponse(
               request.id,
               JSONRPC_ERROR_CODE.INVALID_PARAMS,
               'usage.summary providerId must be a valid ProviderId when specified.',
             );
           }
-          return makeSuccessResponse(request.id, this.db.getUsageSummary(providerId));
+          return makeSuccessResponse(
+            request.id,
+            buildUsageSummaryWithRadar({
+              db: this.db,
+              tracker: this.cooldownTracker,
+              providerFilter: providerId,
+              includeLocalLogs,
+            }),
+          );
         }
 
         case 'recipes.list':
@@ -1122,7 +1171,8 @@ export class DaemonRpcServer {
           }
           const strategyRaw = params['strategy'];
           const strategy = strategyRaw === 'squash' || strategyRaw === 'merge' ? strategyRaw : undefined;
-          const result = await this.gitService.integrateTaskBranch(project.rootPath, {
+          const targetDir = this.resolveRepoWorkingDir(project, params['chatId']);
+          const result = await this.gitService.integrateTaskBranch(targetDir, {
             targetBranch:
               typeof params['targetBranch'] === 'string'
                 ? params['targetBranch']
@@ -1222,6 +1272,121 @@ export class DaemonRpcServer {
             resolution,
           });
           return makeSuccessResponse(request.id, { secondOpinion });
+        }
+
+        case 'worktrees.create': {
+          const projectId = params['projectId'];
+          const chatId = params['chatId'];
+          const branchSlug = params['branchSlug'];
+          if (
+            typeof projectId !== 'string' ||
+            projectId.length === 0 ||
+            typeof chatId !== 'string' ||
+            chatId.length === 0 ||
+            (branchSlug !== undefined && typeof branchSlug !== 'string')
+          ) {
+            return makeErrorResponse(
+              request.id,
+              JSONRPC_ERROR_CODE.INVALID_PARAMS,
+              'worktrees.create requires projectId and chatId.',
+            );
+          }
+          const project = this.db.getProject(projectId);
+          const chat = this.db.getChat(chatId);
+          if (!project || !chat || chat.projectId !== project.id) {
+            return makeErrorResponse(
+              request.id,
+              JSONRPC_ERROR_CODE.INVALID_PARAMS,
+              'Project or chat not found for worktrees.create.',
+            );
+          }
+          const created = await this.worktreeManager.createChatWorktree(project.rootPath, {
+            chatId: chat.id,
+            branchSlug: branchSlug?.trim() || chat.title,
+            allowlist: project.worktreeAllowlist,
+            setupCommand: project.worktreeSetupCommand,
+          });
+          const updatedChat = this.db.setChatWorktree(chat.id, created.worktreePath, created.branch);
+          return makeSuccessResponse(request.id, {
+            chat: updatedChat,
+            worktreePath: created.worktreePath,
+            branch: created.branch,
+          });
+        }
+
+        case 'worktrees.list': {
+          const projectId = params['projectId'];
+          if (typeof projectId !== 'string' || projectId.length === 0) {
+            return makeErrorResponse(
+              request.id,
+              JSONRPC_ERROR_CODE.INVALID_PARAMS,
+              'worktrees.list requires non-empty projectId.',
+            );
+          }
+          const project = this.db.getProject(projectId);
+          if (!project) {
+            return makeErrorResponse(
+              request.id,
+              JSONRPC_ERROR_CODE.INVALID_PARAMS,
+              `Project not found: ${projectId}`,
+            );
+          }
+          const activeSet = new Set(this.db.listProjectChatWorktrees(project.id));
+          const worktrees = await this.worktreeManager.listWorktrees(project.rootPath, activeSet);
+          return makeSuccessResponse(request.id, { worktrees });
+        }
+
+        case 'worktrees.remove': {
+          const projectId = params['projectId'];
+          const chatId = params['chatId'];
+          if (
+            typeof projectId !== 'string' ||
+            projectId.length === 0 ||
+            typeof chatId !== 'string' ||
+            chatId.length === 0
+          ) {
+            return makeErrorResponse(
+              request.id,
+              JSONRPC_ERROR_CODE.INVALID_PARAMS,
+              'worktrees.remove requires projectId and chatId.',
+            );
+          }
+          const project = this.db.getProject(projectId);
+          const chat = this.db.getChat(chatId);
+          if (!project || !chat || chat.projectId !== project.id) {
+            return makeErrorResponse(
+              request.id,
+              JSONRPC_ERROR_CODE.INVALID_PARAMS,
+              'Project or chat not found for worktrees.remove.',
+            );
+          }
+          const removed = chat.worktreePath
+            ? await this.worktreeManager.removeChatWorktree(project.rootPath, chat.worktreePath)
+            : false;
+          const updatedChat = this.db.setChatWorktree(chat.id, null, null);
+          return makeSuccessResponse(request.id, { removed, chat: updatedChat });
+        }
+
+        case 'worktrees.prune': {
+          const projectId = params['projectId'];
+          if (typeof projectId !== 'string' || projectId.length === 0) {
+            return makeErrorResponse(
+              request.id,
+              JSONRPC_ERROR_CODE.INVALID_PARAMS,
+              'worktrees.prune requires non-empty projectId.',
+            );
+          }
+          const project = this.db.getProject(projectId);
+          if (!project) {
+            return makeErrorResponse(
+              request.id,
+              JSONRPC_ERROR_CODE.INVALID_PARAMS,
+              `Project not found: ${projectId}`,
+            );
+          }
+          const activeSet = new Set(this.db.listProjectChatWorktrees(project.id));
+          const pruned = await this.worktreeManager.pruneOrphanWorktrees(project.rootPath, activeSet);
+          return makeSuccessResponse(request.id, pruned);
         }
 
         default:

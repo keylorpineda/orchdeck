@@ -1,4 +1,4 @@
-import { PaperPlaneRight, Scales, Stop } from '@phosphor-icons/react';
+import { GitBranch, PaperPlaneRight, Scales, Stop, Trash } from '@phosphor-icons/react';
 import { useRef, useState, type FormEvent } from 'react';
 import {
   parseInlineMention,
@@ -66,6 +66,7 @@ export interface ChatWorkspaceProps {
   readonly committingChanges: boolean;
   readonly discardingChanges: boolean;
   readonly integratingBranch: boolean;
+  readonly worktreeBusy?: boolean | undefined;
   readonly changeError: string | null;
   readonly changeNotice: string | null;
   readonly onChangeChatModel: (handle: string) => void;
@@ -91,6 +92,8 @@ export interface ChatWorkspaceProps {
   readonly onApproveChanges: (commitMessage: string) => Promise<void>;
   readonly onDiscardChanges: () => Promise<void>;
   readonly onIntegrateBranch: () => Promise<void>;
+  readonly onCreateWorktree?: ((chatId: string) => Promise<void>) | undefined;
+  readonly onRemoveWorktree?: ((chatId: string) => Promise<void>) | undefined;
 }
 
 export function ChatWorkspace({
@@ -120,6 +123,7 @@ export function ChatWorkspace({
   committingChanges,
   discardingChanges,
   integratingBranch,
+  worktreeBusy = false,
   changeError,
   changeNotice,
   onChangeChatModel,
@@ -141,6 +145,8 @@ export function ChatWorkspace({
   onApproveChanges,
   onDiscardChanges,
   onIntegrateBranch,
+  onCreateWorktree,
+  onRemoveWorktree,
 }: ChatWorkspaceProps) {
   const [prompt, setPrompt] = useState('');
   const [sending, setSending] = useState(false);
@@ -203,21 +209,56 @@ export function ChatWorkspace({
 
   return (
     <div className="flex flex-col gap-6">
-      <header className="border-b border-border-subtle pb-4">
-        <h1 className="m-0 font-[var(--font-editorial)] text-[24px] font-medium tracking-[-0.015em] text-ink">
-          {project.name}
-        </h1>
-        <div className="tabular-mono mt-1 flex flex-wrap items-center gap-2 text-[11.5px] text-ink-secondary">
-          <span>{chat.title}</span>
-          <span className="text-ink-tertiary">·</span>
-          <span>{project.rootPath}</span>
-          {project.testCommand ? (
-            <>
-              <span className="text-ink-tertiary">·</span>
-              <span>test: {project.testCommand}</span>
-            </>
-          ) : null}
+      <header className="flex flex-wrap items-start justify-between gap-2 border-b border-border-subtle pb-4">
+        <div>
+          <h1 className="m-0 font-[var(--font-editorial)] text-[24px] font-medium tracking-[-0.015em] text-ink">
+            {project.name}
+          </h1>
+          <div className="tabular-mono mt-1 flex flex-wrap items-center gap-2 text-[11.5px] text-ink-secondary">
+            <span>{chat.title}</span>
+            <span className="text-ink-tertiary">·</span>
+            <span>{chat.worktreePath ?? project.rootPath}</span>
+            {chat.worktreeBranch ? (
+              <span className="rounded-[4px] bg-accent-soft px-1.5 py-0.5 text-[10.5px] text-accent">
+                worktree: {chat.worktreeBranch}
+              </span>
+            ) : null}
+            {project.testCommand ? (
+              <>
+                <span className="text-ink-tertiary">·</span>
+                <span>test: {project.testCommand}</span>
+              </>
+            ) : null}
+          </div>
         </div>
+
+        {project.isValidGitRepo && (onCreateWorktree || onRemoveWorktree) ? (
+          <div className="flex items-center gap-1.5">
+            {chat.worktreePath ? (
+              <button
+                type="button"
+                disabled={worktreeBusy}
+                onClick={() => void onRemoveWorktree?.(chat.id)}
+                className="orch-transition inline-flex items-center gap-1 rounded-[6px] border border-border-strong bg-surface px-2 py-1 text-[11.5px] text-fail hover:border-fail disabled:opacity-50"
+                title="Remove isolated worktree for this chat"
+              >
+                <Trash size={12} weight="regular" />
+                Remove Worktree
+              </button>
+            ) : (
+              <button
+                type="button"
+                disabled={worktreeBusy}
+                onClick={() => void onCreateWorktree?.(chat.id)}
+                className="orch-transition inline-flex items-center gap-1 rounded-[6px] border border-border-subtle bg-inset px-2 py-1 text-[11.5px] text-ink-secondary hover:border-border-strong hover:text-ink disabled:opacity-50"
+                title="Isolate this chat in a dedicated git worktree"
+              >
+                <GitBranch size={12} weight="regular" />
+                Isolate in Worktree
+              </button>
+            )}
+          </div>
+        ) : null}
       </header>
 
       <div className="flex flex-col gap-5">

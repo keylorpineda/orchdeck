@@ -47,10 +47,24 @@ export interface UsageWindowBucket {
   readonly rateLimitCount: number;
 }
 
+export type ProviderRadarStatus = 'available' | 'cooldown';
+
+export interface EmpiricalCalibration {
+  readonly label: 'Local Calibration';
+  readonly sampleCount: number;
+  readonly observedCeilingTokens: number | null;
+  readonly pressureBlocks: number;
+  readonly localCliLogEvents: number;
+}
+
 export interface ProviderUsageSummary {
   readonly providerId: ProviderId;
+  readonly status: ProviderRadarStatus;
+  readonly cooldownUntil: string | null;
+  readonly lastRateLimitMessage: string | null;
   readonly last5Hours: UsageWindowBucket;
   readonly last7Days: UsageWindowBucket;
+  readonly calibration: EmpiricalCalibration;
 }
 
 export interface UsageSummaryResult {

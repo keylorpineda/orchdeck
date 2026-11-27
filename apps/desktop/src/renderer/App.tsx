@@ -18,10 +18,12 @@ import {
   type TaskRunUpdatedNotificationParams,
   type TestRunResult,
   type TurnEventNotificationParams,
+  type UsageSummaryResult,
 } from '@orchdeck/shared';
 import { ChatWorkspace, type MessageTurnMeta } from './components/ChatWorkspace';
 import { ProjectSidebar } from './components/ProjectSidebar';
 import { ThemeProvider } from './components/ThemeProvider';
+import { UsageQuotaRadar } from './components/UsageQuotaRadar';
 import { WorkbenchShell } from './components/WorkbenchShell';
 import {
   FALLBACK_MODEL_OPTIONS,
@@ -67,6 +69,10 @@ function WorkbenchApp() {
   const [committingChanges, setCommittingChanges] = useState(false);
   const [discardingChanges, setDiscardingChanges] = useState(false);
   const [integratingBranch, setIntegratingBranch] = useState(false);
+  const [worktreeBusy, setWorktreeBusy] = useState(false);
+  const [usageSummary, setUsageSummary] = useState<UsageSummaryResult | null>(null);
+  const [includeLocalLogs, setIncludeLocalLogs] = useState(false);
+  const [loadingUsage, setLoadingUsage] = useState(false);
   const [changeError, setChangeError] = useState<string | null>(null);
   const [changeNotice, setChangeNotice] = useState<string | null>(null);
 
@@ -75,23 +81,43 @@ function WorkbenchApp() {
   streamingRef.current = streaming;
   activeChatRef.current = selectedChatId;
 
-  const refreshChangeCard = useCallback(async (projectId: string | null): Promise<void> => {
-    const api = window.orchdeck;
-    if (!api || !projectId) {
-      setChangeSnapshot(null);
-      return;
-    }
-    setLoadingChanges(true);
-    setChangeError(null);
-    try {
-      const { snapshot } = await api.inspectChanges(projectId);
-      setChangeSnapshot(snapshot);
-    } catch (err) {
-      setChangeError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setLoadingChanges(false);
-    }
-  }, []);
+  const refreshUsageSummary = useCallback(
+    async (optInLogs = includeLocalLogs): Promise<void> => {
+      const api = window.orchdeck;
+      if (!api) {
+        return;
+      }
+      setLoadingUsage(true);
+      try {
+        const result = await api.getUsageSummary({ includeLocalLogs: optInLogs });
+        setUsageSummary(result);
+      } finally {
+        setLoadingUsage(false);
+      }
+    },
+    [includeLocalLogs],
+  );
+
+  const refreshChangeCard = useCallback(
+    async (projectId: string | null, chatId?: string | null): Promise<void> => {
+      const api = window.orchdeck;
+      if (!api || !projectId) {
+        setChangeSnapshot(null);
+        return;
+      }
+      setLoadingChanges(true);
+      setChangeError(null);
+      try {
+        const { snapshot } = await api.inspectChanges(projectId, chatId ?? undefined);
+        setChangeSnapshot(snapshot);
+      } catch (err) {
+        setChangeError(err instanceof Error ? err.message : String(err));
+      } finally {
+        setLoadingChanges(false);
+      }
+    },
+    [],
+  );
 
   const refreshChatsForProject = useCallback(
     async (projectId: string, showArchived = includeArchived): Promise<readonly ChatRecord[]> => {
@@ -115,11 +141,17 @@ function WorkbenchApp() {
     }
 
     try {
-      const [{ projects: loadedProjects }, { adapters }, { recipes: loadedRecipes }] =
-        await Promise.all([api.listProjects(), api.listAdapters(), api.listRecipes()]);
+      const [{ projects: loadedProjects }, { adapters }, { recipes: loadedRecipes }, usage] =
+        await Promise.all([
+          api.listProjects(),
+          api.listAdapters(),
+          api.listRecipes(),
+          api.getUsageSummary({ includeLocalLogs }),
+        ]);
       setProjects(loadedProjects);
       setModelOptions(buildModelCatalog(adapters));
       setRecipes(loadedRecipes);
+      setUsageSummary(usage);
 
       const chatMap: Record<string, readonly ChatRecord[]> = {};
       await Promise.all(
@@ -207,7 +239,8 @@ function WorkbenchApp() {
               const [{ projects: refreshedProjects }] = await Promise.all([
                 api.listProjects(),
                 refreshChatsForProject(selectedProjectId),
-                refreshChangeCard(selectedProjectId),
+                refreshChangeCard(selectedProjectId, targetChatId),
+                refreshUsageSummary(),
               ]);
               setProjects(refreshedProjects);
             }
@@ -272,16 +305,16 @@ function WorkbenchApp() {
       unsubRecipeRun();
       unsubSecondOpinion();
     };
-  }, [refreshChangeCard, refreshChatsForProject, selectedProjectId]);
+  }, [refreshChangeCard, refreshChatsForProject, refreshUsageSummary, selectedProjectId]);
 
   const handleSelectProject = (projectId: string): void => {
     setSelectedProjectId(projectId);
     setTestResult(null);
     setChangeNotice(null);
-    void refreshChangeCard(projectId);
     const chats = chatsByProject[projectId] ?? [];
     const nextChatId = chats[0]?.id ?? null;
     setSelectedChatId(nextChatId);
+    void refreshChangeCard(projectId, nextChatId);
     if (nextChatId && window.orchdeck) {
       void window.orchdeck.listMessages(nextChatId).then((res) => setMessages(res.messages));
     } else {
@@ -292,6 +325,7 @@ function WorkbenchApp() {
   const handleSelectChat = (projectId: string, chatId: string): void => {
     setSelectedProjectId(projectId);
     setSelectedChatId(chatId);
+    void refreshChangeCard(projectId, chatId);
     if (window.orchdeck) {
       void window.orchdeck.listMessages(chatId).then((res) => setMessages(res.messages));
     }
@@ -447,12 +481,14 @@ function WorkbenchApp() {
     setHandoffNotice(null);
     setActiveTaskRun(null);
 
+    const effectiveCwd = currentChat?.worktreePath ?? project.rootPath;
+
     if (selectedRecipeId && !mention.overrideHandle) {
       const { recipeRun } = await api.runRecipe({
         recipeId: selectedRecipeId,
         projectId: project.id,
         chatId: selectedChatId,
-        cwd: project.rootPath,
+        cwd: effectiveCwd,
         prompt: effectivePrompt,
       });
       setActiveRecipeRun(recipeRun);
@@ -463,7 +499,7 @@ function WorkbenchApp() {
     const { taskRun } = await api.startTaskRun({
       projectId: project.id,
       chatId: selectedChatId,
-      cwd: project.rootPath,
+      cwd: effectiveCwd,
       modelHandle: effectiveHandle,
       prompt: effectivePrompt,
       mode: approvalMode,
@@ -604,7 +640,7 @@ function WorkbenchApp() {
     setRunningTests(true);
     setChangeError(null);
     try {
-      const { result } = await api.runProjectTests(selectedProjectId);
+      const { result } = await api.runProjectTests(selectedProjectId, selectedChatId ?? undefined);
       setTestResult(result);
     } catch (err) {
       setChangeError(err instanceof Error ? err.message : String(err));
@@ -624,12 +660,13 @@ function WorkbenchApp() {
     try {
       const { branch, commitSha } = await api.approveChanges({
         projectId: selectedProjectId,
+        chatId: selectedChatId ?? undefined,
         commitMessage,
         branchSlug: deriveChatTitleFromPrompt(commitMessage),
       });
       const [{ projects: refreshedProjects }] = await Promise.all([
         api.listProjects(),
-        refreshChangeCard(selectedProjectId),
+        refreshChangeCard(selectedProjectId, selectedChatId),
       ]);
       setProjects(refreshedProjects);
       setChangeNotice(`Committed ${commitSha.slice(0, 7)} cleanly on ${branch}.`);
@@ -649,10 +686,10 @@ function WorkbenchApp() {
     setChangeError(null);
     setChangeNotice(null);
     try {
-      const result = await api.discardChanges(selectedProjectId);
+      const result = await api.discardChanges(selectedProjectId, selectedChatId ?? undefined);
       const [{ projects: refreshedProjects }] = await Promise.all([
         api.listProjects(),
-        refreshChangeCard(selectedProjectId),
+        refreshChangeCard(selectedProjectId, selectedChatId),
       ]);
       setProjects(refreshedProjects);
       setChangeNotice(
@@ -679,12 +716,13 @@ function WorkbenchApp() {
     try {
       const result = await api.integrateBranch({
         projectId: project.id,
+        chatId: selectedChatId ?? undefined,
         targetBranch: project.defaultBranch,
         strategy: 'merge',
       });
       const [{ projects: refreshedProjects }] = await Promise.all([
         api.listProjects(),
-        refreshChangeCard(project.id),
+        refreshChangeCard(project.id, selectedChatId),
       ]);
       setProjects(refreshedProjects);
       if (result.integrated) {
@@ -696,6 +734,46 @@ function WorkbenchApp() {
       setChangeError(err instanceof Error ? err.message : String(err));
     } finally {
       setIntegratingBranch(false);
+    }
+  };
+
+  const handleCreateWorktree = async (chatId: string): Promise<void> => {
+    const api = window.orchdeck;
+    if (!api || !selectedProjectId) {
+      return;
+    }
+    setWorktreeBusy(true);
+    setChangeError(null);
+    try {
+      await api.createWorktree({ projectId: selectedProjectId, chatId });
+      await Promise.all([
+        refreshChatsForProject(selectedProjectId),
+        refreshChangeCard(selectedProjectId, chatId),
+      ]);
+    } catch (err) {
+      setChangeError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setWorktreeBusy(false);
+    }
+  };
+
+  const handleRemoveWorktree = async (chatId: string): Promise<void> => {
+    const api = window.orchdeck;
+    if (!api || !selectedProjectId) {
+      return;
+    }
+    setWorktreeBusy(true);
+    setChangeError(null);
+    try {
+      await api.removeWorktree({ projectId: selectedProjectId, chatId });
+      await Promise.all([
+        refreshChatsForProject(selectedProjectId),
+        refreshChangeCard(selectedProjectId, chatId),
+      ]);
+    } catch (err) {
+      setChangeError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setWorktreeBusy(false);
     }
   };
 
@@ -754,7 +832,19 @@ function WorkbenchApp() {
   return (
     <WorkbenchShell
       projectName={activeProject?.name}
-      branchName={activeProject?.currentBranch ?? undefined}
+      branchName={activeChat?.worktreeBranch ?? activeProject?.currentBranch ?? undefined}
+      radarSlot={
+        <UsageQuotaRadar
+          summary={usageSummary}
+          includeLocalLogs={includeLocalLogs}
+          loading={loadingUsage}
+          onToggleLocalLogs={(next) => {
+            setIncludeLocalLogs(next);
+            void refreshUsageSummary(next);
+          }}
+          onRefresh={() => refreshUsageSummary()}
+        />
+      }
       sidebarContent={
         <ProjectSidebar
           projects={projects}
@@ -809,6 +899,7 @@ function WorkbenchApp() {
         committingChanges={committingChanges}
         discardingChanges={discardingChanges}
         integratingBranch={integratingBranch}
+        worktreeBusy={worktreeBusy}
         changeError={changeError}
         changeNotice={changeNotice}
         onChangeChatModel={setChatModelHandle}
@@ -825,11 +916,13 @@ function WorkbenchApp() {
         onSendPrompt={handleSendPrompt}
         onCancelTurn={handleCancelTurn}
         onCreateChat={handleCreateChat}
-        onRefreshChanges={() => refreshChangeCard(selectedProjectId)}
+        onRefreshChanges={() => refreshChangeCard(selectedProjectId, selectedChatId)}
         onRunTests={handleRunTests}
         onApproveChanges={handleApproveChanges}
         onDiscardChanges={handleDiscardChanges}
         onIntegrateBranch={handleIntegrateBranch}
+        onCreateWorktree={handleCreateWorktree}
+        onRemoveWorktree={handleRemoveWorktree}
       />
     </WorkbenchShell>
   );

@@ -9,8 +9,10 @@ import { DaemonDatabase } from './db/database.js';
 import { RecipeOrchestrator } from './fusion/recipe-orchestrator.js';
 import { SecondOpinionOrchestrator } from './fusion/second-opinion-orchestrator.js';
 import { GitService } from './git/git-service.js';
+import { WorktreeManager } from './git/worktree-manager.js';
 import { DaemonRpcServer } from './ipc/server.js';
 import { resolveDefaultDataDir, resolveSocketPath } from './ipc/socket-path.js';
+import { ProviderCooldownTracker } from './usage/quota-radar.js';
 
 export interface StartDaemonOptions {
   readonly dataDir?: string | undefined;
@@ -73,6 +75,9 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Run
     },
   });
 
+  const cooldownTracker = new ProviderCooldownTracker(turnRunner);
+  const worktreeManager = new WorktreeManager(gitService);
+
   server = new DaemonRpcServer({
     db,
     socketPath,
@@ -82,6 +87,8 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Run
     taskRunOrchestrator,
     recipeOrchestrator,
     secondOpinionOrchestrator,
+    cooldownTracker,
+    worktreeManager,
     gitService,
   });
 
@@ -98,6 +105,7 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Run
     socketPath,
     authToken,
     close: async () => {
+      cooldownTracker.dispose();
       secondOpinionOrchestrator.dispose();
       recipeOrchestrator.dispose();
       taskRunOrchestrator.dispose();

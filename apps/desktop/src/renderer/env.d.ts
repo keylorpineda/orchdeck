@@ -55,7 +55,14 @@ import type {
   TurnEventNotificationParams,
   TurnStartParams,
   TurnStartResult,
+  UsageSummaryParams,
   UsageSummaryResult,
+  WorktreesCreateParams,
+  WorktreesCreateResult,
+  WorktreesListResult,
+  WorktreesPruneResult,
+  WorktreesRemoveParams,
+  WorktreesRemoveResult,
 } from '@orchdeck/shared';
 
 export interface PickDirectoryResult {
@@ -82,14 +89,14 @@ export interface OrchdeckApi {
   listAdapters(): Promise<AdaptersListResult>;
   startTurn(params: TurnStartParams): Promise<TurnStartResult>;
   cancelTurn(turnId: string): Promise<TurnCancelResult>;
-  inspectChanges(projectId: string): Promise<ChangesInspectResult>;
-  runProjectTests(projectId: string): Promise<ChangesRunTestsResult>;
+  inspectChanges(projectId: string, chatId?: string): Promise<ChangesInspectResult>;
+  runProjectTests(projectId: string, chatId?: string): Promise<ChangesRunTestsResult>;
   approveChanges(params: ChangesApproveParams): Promise<ChangesApproveResult>;
-  discardChanges(projectId: string): Promise<ChangesDiscardResult>;
+  discardChanges(projectId: string, chatId?: string): Promise<ChangesDiscardResult>;
   startTaskRun(params: TaskRunStartParams): Promise<TaskRunStartResult>;
   approveTaskRunPlan(taskRunId: string): Promise<TaskRunActionResult>;
   rejectTaskRunPlan(taskRunId: string): Promise<TaskRunActionResult>;
-  getUsageSummary(providerId?: ProviderId): Promise<UsageSummaryResult>;
+  getUsageSummary(params?: UsageSummaryParams): Promise<UsageSummaryResult>;
   listRecipes(): Promise<RecipesListResult>;
   createRecipe(params: RecipeCreateParams): Promise<RecipeCreateResult>;
   updateRecipe(params: RecipeUpdateParams): Promise<RecipeUpdateResult>;
@@ -99,6 +106,10 @@ export interface OrchdeckApi {
   integrateBranch(params: ChangesIntegrateBranchParams): Promise<ChangesIntegrateBranchResult>;
   startSecondOpinion(params: SecondOpinionStartParams): Promise<SecondOpinionStartResult>;
   resolveSecondOpinion(params: SecondOpinionResolveParams): Promise<SecondOpinionResolveResult>;
+  createWorktree(params: WorktreesCreateParams): Promise<WorktreesCreateResult>;
+  listWorktrees(projectId: string): Promise<WorktreesListResult>;
+  removeWorktree(params: WorktreesRemoveParams): Promise<WorktreesRemoveResult>;
+  pruneWorktrees(projectId: string): Promise<WorktreesPruneResult>;
   onTurnEvent(listener: (event: TurnEventNotificationParams) => void): () => void;
   onTaskRunUpdated(listener: (event: TaskRunUpdatedNotificationParams) => void): () => void;
   onRecipeRunUpdated(listener: (event: RecipeRunUpdatedNotificationParams) => void): () => void;

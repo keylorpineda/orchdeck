@@ -11,6 +11,10 @@ import {
 import { useState, type KeyboardEvent } from 'react';
 import type { ChangeCardSnapshot, ChangeFileStatus, TestRunResult } from '@orchdeck/shared';
 import { computeMicroBarSegments } from '../state/change-card-utils';
+import {
+  formatInlineCommentsPrompt,
+  type InlineDiffComment,
+} from '../state/inline-comments';
 import { ShikiDiffView } from './ShikiDiffView';
 
 export interface ChangeCardProps {
@@ -86,6 +90,7 @@ export function ChangeCard({
   const [showTestOutput, setShowTestOutput] = useState(false);
   const [commitMessage, setCommitMessage] = useState('');
   const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const [inlineComments, setInlineComments] = useState<readonly InlineDiffComment[]>([]);
 
   const files = snapshot?.files ?? [];
   const isClean = snapshot?.isClean ?? true;
@@ -115,12 +120,14 @@ export function ChangeCard({
     void onApprove(trimmed).then(() => {
       setCommitMessage('');
       setConfirmDiscard(false);
+      setInlineComments([]);
     });
   };
 
   const handleConfirmDiscard = (): void => {
     void onDiscard().then(() => {
       setConfirmDiscard(false);
+      setInlineComments([]);
     });
   };
 
@@ -298,6 +305,16 @@ export function ChangeCard({
                       filePath={file.path}
                       diff={file.diff}
                       isBinary={file.isBinary}
+                      comments={inlineComments}
+                      onAddComment={(comment) =>
+                        setInlineComments((prev) => [
+                          ...prev,
+                          { ...comment, id: `c-${Date.now()}-${prev.length}` },
+                        ])
+                      }
+                      onRemoveComment={(commentId) =>
+                        setInlineComments((prev) => prev.filter((item) => item.id !== commentId))
+                      }
                     />
                   ) : null}
                 </div>
@@ -334,15 +351,20 @@ export function ChangeCard({
 
                 <button
                   type="button"
-                  onClick={() =>
-                    onRequestChanges(
-                      `Requesting changes across ${files.map((f) => f.path).join(', ')}: `,
-                    )
-                  }
+                  onClick={() => {
+                    const bundled = formatInlineCommentsPrompt(inlineComments);
+                    const contextSummary =
+                      bundled ||
+                      `Requesting changes across ${files.map((f) => f.path).join(', ')}: `;
+                    setInlineComments([]);
+                    onRequestChanges(contextSummary);
+                  }}
                   className="orch-transition inline-flex items-center gap-1.5 rounded-[6px] border border-border-strong bg-surface px-2.5 py-1 text-[12px] text-ink hover:border-ink-tertiary"
                 >
                   <ChatCircleText size={13} weight="regular" />
-                  Request Changes
+                  {inlineComments.length > 0
+                    ? `Request Changes (${inlineComments.length})`
+                    : 'Request Changes'}
                 </button>
               </div>
 

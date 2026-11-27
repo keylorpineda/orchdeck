@@ -54,7 +54,14 @@ import type {
   TurnEventNotificationParams,
   TurnStartParams,
   TurnStartResult,
+  UsageSummaryParams,
   UsageSummaryResult,
+  WorktreesCreateParams,
+  WorktreesCreateResult,
+  WorktreesListResult,
+  WorktreesPruneResult,
+  WorktreesRemoveParams,
+  WorktreesRemoveResult,
 } from '@orchdeck/shared';
 
 interface PickDirectoryResult {
@@ -81,14 +88,14 @@ interface OrchdeckBridge {
   listAdapters(): Promise<AdaptersListResult>;
   startTurn(params: TurnStartParams): Promise<TurnStartResult>;
   cancelTurn(turnId: string): Promise<TurnCancelResult>;
-  inspectChanges(projectId: string): Promise<ChangesInspectResult>;
-  runProjectTests(projectId: string): Promise<ChangesRunTestsResult>;
+  inspectChanges(projectId: string, chatId?: string): Promise<ChangesInspectResult>;
+  runProjectTests(projectId: string, chatId?: string): Promise<ChangesRunTestsResult>;
   approveChanges(params: ChangesApproveParams): Promise<ChangesApproveResult>;
-  discardChanges(projectId: string): Promise<ChangesDiscardResult>;
+  discardChanges(projectId: string, chatId?: string): Promise<ChangesDiscardResult>;
   startTaskRun(params: TaskRunStartParams): Promise<TaskRunStartResult>;
   approveTaskRunPlan(taskRunId: string): Promise<TaskRunActionResult>;
   rejectTaskRunPlan(taskRunId: string): Promise<TaskRunActionResult>;
-  getUsageSummary(providerId?: ProviderId): Promise<UsageSummaryResult>;
+  getUsageSummary(params?: UsageSummaryParams): Promise<UsageSummaryResult>;
   listRecipes(): Promise<RecipesListResult>;
   createRecipe(params: RecipeCreateParams): Promise<RecipeCreateResult>;
   updateRecipe(params: RecipeUpdateParams): Promise<RecipeUpdateResult>;
@@ -98,6 +105,10 @@ interface OrchdeckBridge {
   integrateBranch(params: ChangesIntegrateBranchParams): Promise<ChangesIntegrateBranchResult>;
   startSecondOpinion(params: SecondOpinionStartParams): Promise<SecondOpinionStartResult>;
   resolveSecondOpinion(params: SecondOpinionResolveParams): Promise<SecondOpinionResolveResult>;
+  createWorktree(params: WorktreesCreateParams): Promise<WorktreesCreateResult>;
+  listWorktrees(projectId: string): Promise<WorktreesListResult>;
+  removeWorktree(params: WorktreesRemoveParams): Promise<WorktreesRemoveResult>;
+  pruneWorktrees(projectId: string): Promise<WorktreesPruneResult>;
   onTurnEvent(listener: (event: TurnEventNotificationParams) => void): () => void;
   onTaskRunUpdated(listener: (event: TaskRunUpdatedNotificationParams) => void): () => void;
   onRecipeRunUpdated(listener: (event: RecipeRunUpdatedNotificationParams) => void): () => void;
@@ -136,22 +147,22 @@ const bridge: OrchdeckBridge = {
     ipcRenderer.invoke('orchdeck:turn-start', params) as Promise<TurnStartResult>,
   cancelTurn: (turnId: string) =>
     ipcRenderer.invoke('orchdeck:turn-cancel', turnId) as Promise<TurnCancelResult>,
-  inspectChanges: (projectId: string) =>
-    ipcRenderer.invoke('orchdeck:changes-inspect', projectId) as Promise<ChangesInspectResult>,
-  runProjectTests: (projectId: string) =>
-    ipcRenderer.invoke('orchdeck:changes-run-tests', projectId) as Promise<ChangesRunTestsResult>,
+  inspectChanges: (projectId: string, chatId?: string) =>
+    ipcRenderer.invoke('orchdeck:changes-inspect', { projectId, chatId }) as Promise<ChangesInspectResult>,
+  runProjectTests: (projectId: string, chatId?: string) =>
+    ipcRenderer.invoke('orchdeck:changes-run-tests', { projectId, chatId }) as Promise<ChangesRunTestsResult>,
   approveChanges: (params: ChangesApproveParams) =>
     ipcRenderer.invoke('orchdeck:changes-approve', params) as Promise<ChangesApproveResult>,
-  discardChanges: (projectId: string) =>
-    ipcRenderer.invoke('orchdeck:changes-discard', projectId) as Promise<ChangesDiscardResult>,
+  discardChanges: (projectId: string, chatId?: string) =>
+    ipcRenderer.invoke('orchdeck:changes-discard', { projectId, chatId }) as Promise<ChangesDiscardResult>,
   startTaskRun: (params: TaskRunStartParams) =>
     ipcRenderer.invoke('orchdeck:task-run-start', params) as Promise<TaskRunStartResult>,
   approveTaskRunPlan: (taskRunId: string) =>
     ipcRenderer.invoke('orchdeck:task-run-approve-plan', taskRunId) as Promise<TaskRunActionResult>,
   rejectTaskRunPlan: (taskRunId: string) =>
     ipcRenderer.invoke('orchdeck:task-run-reject-plan', taskRunId) as Promise<TaskRunActionResult>,
-  getUsageSummary: (providerId?: ProviderId) =>
-    ipcRenderer.invoke('orchdeck:usage-summary', providerId) as Promise<UsageSummaryResult>,
+  getUsageSummary: (params?: UsageSummaryParams) =>
+    ipcRenderer.invoke('orchdeck:usage-summary', params ?? {}) as Promise<UsageSummaryResult>,
   listRecipes: () => ipcRenderer.invoke('orchdeck:recipes-list') as Promise<RecipesListResult>,
   createRecipe: (params: RecipeCreateParams) =>
     ipcRenderer.invoke('orchdeck:recipes-create', params) as Promise<RecipeCreateResult>,
@@ -175,6 +186,14 @@ const bridge: OrchdeckBridge = {
       'orchdeck:second-opinion-resolve',
       params,
     ) as Promise<SecondOpinionResolveResult>,
+  createWorktree: (params: WorktreesCreateParams) =>
+    ipcRenderer.invoke('orchdeck:worktrees-create', params) as Promise<WorktreesCreateResult>,
+  listWorktrees: (projectId: string) =>
+    ipcRenderer.invoke('orchdeck:worktrees-list', projectId) as Promise<WorktreesListResult>,
+  removeWorktree: (params: WorktreesRemoveParams) =>
+    ipcRenderer.invoke('orchdeck:worktrees-remove', params) as Promise<WorktreesRemoveResult>,
+  pruneWorktrees: (projectId: string) =>
+    ipcRenderer.invoke('orchdeck:worktrees-prune', projectId) as Promise<WorktreesPruneResult>,
   onTurnEvent: (listener: (event: TurnEventNotificationParams) => void) => {
     const handler = (_ipcEvent: IpcRendererEvent, payload: TurnEventNotificationParams): void => {
       listener(payload);

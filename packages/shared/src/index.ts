@@ -123,10 +123,21 @@ export {
   type TurnStartParams,
   type TurnStartResult,
   type UsageSummaryParams,
+  type WorktreeInfo,
+  type WorktreesCreateParams,
+  type WorktreesCreateResult,
+  type WorktreesListParams,
+  type WorktreesListResult,
+  type WorktreesPruneParams,
+  type WorktreesPruneResult,
+  type WorktreesRemoveParams,
+  type WorktreesRemoveResult,
 } from './rpc.js';
 
 export {
   TASK_RUN_STATES,
+  type EmpiricalCalibration,
+  type ProviderRadarStatus,
   type ProviderUsageSummary,
   type TaskRunRecord,
   type TaskRunState,

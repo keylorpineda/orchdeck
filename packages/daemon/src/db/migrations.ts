@@ -88,4 +88,14 @@ export const INITIAL_MIGRATIONS: readonly Migration[] = [
       );
     `,
   },
+  {
+    version: 4,
+    name: 'worktree_metadata_columns',
+    sql: `
+      ALTER TABLE projects ADD COLUMN worktree_allowlist TEXT NOT NULL DEFAULT '[]';
+      ALTER TABLE projects ADD COLUMN worktree_setup_command TEXT;
+      ALTER TABLE chats ADD COLUMN worktree_path TEXT;
+      ALTER TABLE chats ADD COLUMN worktree_branch TEXT;
+    `,
+  },
 ];
