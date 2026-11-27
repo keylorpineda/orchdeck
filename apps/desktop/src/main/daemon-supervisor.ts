@@ -1,13 +1,20 @@
 import { spawn, type ChildProcessByStdio } from 'node:child_process';
 import crypto from 'node:crypto';
-import { createRequire } from 'node:module';
 import path from 'node:path';
 import type { Readable } from 'node:stream';
+import { fileURLToPath } from 'node:url';
 import { DaemonRpcClient, resolveSocketPath } from '@orchdeck/daemon';
 import { redactSecrets } from '@orchdeck/shared';
 import { sanitizeDaemonEnv } from './security.js';
 
-const require = createRequire(import.meta.url);
+export function resolveDaemonCliPath(): string {
+  try {
+    return fileURLToPath(import.meta.resolve('@orchdeck/daemon/cli'));
+  } catch {
+    const daemonEntry = fileURLToPath(import.meta.resolve('@orchdeck/daemon'));
+    return path.join(path.dirname(daemonEntry), 'cli.js');
+  }
+}
 
 export interface DaemonSupervisorOptions {
   readonly dataDir: string;
@@ -37,8 +44,7 @@ export class DaemonSupervisor {
       return this.client;
     }
 
-    const daemonEntry = require.resolve('@orchdeck/daemon');
-    const daemonCliPath = path.join(path.dirname(daemonEntry), 'cli.js');
+    const daemonCliPath = resolveDaemonCliPath();
     const authToken = crypto.randomBytes(32).toString('hex');
     const socketPath = resolveSocketPath({ dataDir: this.dataDir });
 
