@@ -1,12 +1,24 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+interface ForbiddenFileRule {
+  readonly name: string;
+  readonly test: (name: string) => boolean;
+}
+
+interface SecretPatternRule {
+  readonly id: string;
+  readonly regex: RegExp;
+}
+
 const args = process.argv.slice(2);
 let targetDir = process.cwd();
 
 for (let i = 0; i < args.length; i += 1) {
-  if (args[i] === '--target' && args[i + 1]) {
-    targetDir = path.resolve(args[i + 1]);
+  const arg = args[i];
+  const nextArg = args[i + 1];
+  if (arg === '--target' && nextArg) {
+    targetDir = path.resolve(nextArg);
     i += 1;
   }
 }
@@ -25,25 +37,53 @@ const SKIP_DIRS = new Set([
 const SKIP_CONTENT_FILES = new Set([
   'pnpm-lock.yaml',
   '.gitleaks.toml',
-  'scripts/check-secrets.mjs',
+  'scripts/check-secrets.ts',
   '.env.example',
 ]);
 
-const FORBIDDEN_FILE_PATTERNS = [
-  { name: 'dotenv-file', test: (name) => name === '.env' || (name.startsWith('.env.') && name !== '.env.example') },
-  { name: 'private-key-or-cert', test: (name) => /\.(pem|key|p12|pfx|jks)$/i.test(name) || name === 'id_rsa' || name === 'id_ed25519' },
-  { name: 'local-sqlite-db', test: (name) => /\.(db|db-wal|db-shm|sqlite|sqlite3)$/i.test(name) },
-  { name: 'sensitive-credentials-file', test: (name) => /^(credentials\.json|secrets\.json|auth\.json|local\.settings\.json)$/i.test(name) || /^secrets\./i.test(name) || /\.secret$/i.test(name) },
+const FORBIDDEN_FILE_PATTERNS: readonly ForbiddenFileRule[] = [
+  {
+    name: 'dotenv-file',
+    test: (name) => name === '.env' || (name.startsWith('.env.') && name !== '.env.example'),
+  },
+  {
+    name: 'private-key-or-cert',
+    test: (name) =>
+      /\.(pem|key|p12|pfx|jks)$/i.test(name) || name === 'id_rsa' || name === 'id_ed25519',
+  },
+  {
+    name: 'local-sqlite-db',
+    test: (name) => /\.(db|db-wal|db-shm|sqlite|sqlite3)$/i.test(name),
+  },
+  {
+    name: 'sensitive-credentials-file',
+    test: (name) =>
+      /^(credentials\.json|secrets\.json|auth\.json|local\.settings\.json)$/i.test(name) ||
+      /^secrets\./i.test(name) ||
+      /\.secret$/i.test(name),
+  },
 ];
 
-const SECRET_PATTERNS = [
+const SECRET_PATTERNS: readonly SecretPatternRule[] = [
   { id: 'anthropic-api-key', regex: /\bsk-ant-[A-Za-z0-9_-]{20,}/ },
-  { id: 'openai-api-key', regex: /\b(?:sk-proj-[A-Za-z0-9_-]{20,}|sk-[A-Za-z0-9]{20,}T3BlbkFJ[A-Za-z0-9]{20,})/ },
+  {
+    id: 'openai-api-key',
+    regex: /\b(?:sk-proj-[A-Za-z0-9_-]{20,}|sk-[A-Za-z0-9]{20,}T3BlbkFJ[A-Za-z0-9]{20,})/,
+  },
   { id: 'google-gemini-api-key', regex: /\bAIza[0-9A-Za-z\-_]{35}/ },
-  { id: 'github-token', regex: /\b(?:gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,})/ },
+  {
+    id: 'github-token',
+    regex: /\b(?:gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,})/,
+  },
   { id: 'aws-access-key', regex: /\bAKIA[0-9A-Z]{16}\b/ },
-  { id: 'private-key-block', regex: /-----BEGIN (?:RSA |EC |OPENSSH |DSA |PGP )?PRIVATE KEY-----/ },
-  { id: 'credentialed-connection-url', regex: /(?:postgres|postgresql|mysql|mongodb(?:\+srv)?|redis):\/\/[^:\s/]+:[^@\s]+@/i },
+  {
+    id: 'private-key-block',
+    regex: /-----BEGIN (?:RSA |EC |OPENSSH |DSA |PGP )?PRIVATE KEY-----/,
+  },
+  {
+    id: 'credentialed-connection-url',
+    regex: /(?:postgres|postgresql|mysql|mongodb(?:\+srv)?|redis):\/\/[^:\s/]+:[^@\s]+@/i,
+  },
   { id: 'npm-auth-token', regex: /_authToken\s*=\s*\S+/ },
 ];
 
@@ -52,12 +92,8 @@ const TEXT_EXTENSIONS = new Set([
   '.yml',
   '.yaml',
   '.json',
-  '.mjs',
-  '.cjs',
-  '.js',
   '.ts',
   '.tsx',
-  '.jsx',
   '.css',
   '.html',
   '.txt',
@@ -67,9 +103,9 @@ const TEXT_EXTENSIONS = new Set([
   '.sql',
 ]);
 
-const findings = [];
+const findings: string[] = [];
 
-function walk(dirPath) {
+function walk(dirPath: string): void {
   const entries = fs.readdirSync(dirPath, { withFileTypes: true });
   for (const entry of entries) {
     if (SKIP_DIRS.has(entry.name)) {
@@ -127,4 +163,6 @@ if (findings.length > 0) {
   process.exit(1);
 }
 
-process.stdout.write('Secret and sensitive-file scan passed (zero exposed credentials or sensitive files).\n');
+process.stdout.write(
+  'Secret and sensitive-file scan passed (zero exposed credentials or sensitive files).\n',
+);

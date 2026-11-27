@@ -1,4 +1,4 @@
-const execPath = process.env.npm_execpath ?? '';
+const execPath = process.env['npm_execpath'] ?? '';
 
 if (execPath && !/pnpm/i.test(execPath)) {
   process.stderr.write(

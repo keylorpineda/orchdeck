@@ -44,7 +44,7 @@ description = "Allow safe example templates and explicitly annotated synthetic t
 paths = [
   '''^\.env\.example$''',
   '''^\.gitleaks\.toml$''',
-  '''^scripts/check-secrets\.mjs$''',
+  '''^scripts/check-secrets\.ts$''',
 ]
 regexes = [
   '''orchdeck-secret-ignore''',

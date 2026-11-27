@@ -12,7 +12,11 @@ Orchdeck uses **`pnpm`** exclusively (`packageManager: pnpm@11.17.0`).
 
 - **Prohibited tools:** never run `npm`, `npx`, or `yarn` in this repository.
 - **Lockfile rule:** only `pnpm-lock.yaml` is permitted. Committing `package-lock.json`, `yarn.lock`, or `bun.lock*` will fail both local pre-commit checks and CI.
-- **Enforcement:** `scripts/enforce-pnpm.mjs` runs on `preinstall` and aborts non-`pnpm` invocations. `scripts/check-repo-hygiene.mjs` verifies lockfile and `packageManager` compliance.
+- **Enforcement:** `scripts/enforce-pnpm.ts` runs on `preinstall` and aborts non-`pnpm` invocations. `scripts/check-repo-hygiene.ts` verifies lockfile, TypeScript-only compliance, and `packageManager`.
+
+### TypeScript-Only Policy
+
+Orchdeck is **100% strict TypeScript**. Do not commit `.js`, `.mjs`, `.cjs`, or `.jsx` source files anywhere in the repository (only compiled artifacts inside gitignored `dist/` directories are emitted at build time). `pnpm run lint:repo` rejects any committed JavaScript source files.
 
 ### Local Setup
 
@@ -124,7 +128,7 @@ Every Pull Request must:
    - `## Linked Issues`
    - `## Detailed Changes`
    - `## Verification and Testing`
-4. Pass both **CI** (`lint`, `typecheck`, `test`, `build` via `pnpm`) and **PR Governance** (`check-pr-governance.mjs` + `commitlint` across all PR commits).
+4. Pass both **CI** (`lint`, `typecheck`, `test`, `build` via `pnpm`) and **PR Governance** (`check-pr-governance.ts` + `commitlint` across all PR commits).
 
 ---
 

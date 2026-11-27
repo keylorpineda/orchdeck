@@ -1,4 +1,4 @@
-export const ALLOWED_TYPES = [
+export const ALLOWED_TYPES: readonly string[] = [
   'feat',
   'fix',
   'docs',
@@ -12,7 +12,7 @@ export const ALLOWED_TYPES = [
   'revert',
 ];
 
-export const ALLOWED_SCOPES = [
+export const ALLOWED_SCOPES: readonly string[] = [
   'repo',
   'ci',
   'deps',
