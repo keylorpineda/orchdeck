@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -7,7 +8,7 @@ import {
   type MessageRole,
   type ProviderId,
 } from '@orchdeck/shared';
-import { app, BrowserWindow, dialog, ipcMain, session, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, protocol, session, shell } from 'electron';
 import { DaemonSupervisor } from './daemon-supervisor.js';
 import {
   PRODUCTION_CSP,
@@ -17,6 +18,18 @@ import {
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: 'app',
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+      corsEnabled: true,
+    },
+  },
+]);
 
 const supervisor = new DaemonSupervisor({
   dataDir: path.join(app.getPath('userData'), 'daemon-data'),
@@ -909,9 +922,61 @@ function registerIpcHandlers(): void {
   });
 }
 
+const RENDERER_MIME_TYPES: Readonly<Record<string, string>> = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.mjs': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.woff2': 'font/woff2',
+  '.woff': 'font/woff',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+};
+
+function registerRendererProtocol(): void {
+  const rendererRoot = path.resolve(__dirname, '../renderer');
+
+  protocol.handle('app', async (request) => {
+    let parsedUrl: URL;
+    try {
+      parsedUrl = new URL(request.url);
+    } catch {
+      return new Response('Bad Request', { status: 400 });
+    }
+
+    if (parsedUrl.hostname !== 'orchdeck') {
+      return new Response('Forbidden', { status: 403 });
+    }
+
+    const rawPath = decodeURIComponent(parsedUrl.pathname);
+    const relativePath = rawPath === '/' || rawPath === '' ? 'index.html' : rawPath.replace(/^\/+/, '');
+    const candidatePath = path.resolve(rendererRoot, relativePath);
+
+    if (candidatePath !== rendererRoot && !candidatePath.startsWith(`${rendererRoot}${path.sep}`)) {
+      return new Response('Forbidden', { status: 403 });
+    }
+
+    if (!fs.existsSync(candidatePath) || !fs.statSync(candidatePath).isFile()) {
+      return new Response('Not Found', { status: 404 });
+    }
+
+    const body = await fs.promises.readFile(candidatePath);
+    const ext = path.extname(candidatePath).toLowerCase();
+    const contentType = RENDERER_MIME_TYPES[ext] ?? 'application/octet-stream';
+    return new Response(body, {
+      status: 200,
+      headers: {
+        'Content-Type': contentType,
+        'Content-Security-Policy': PRODUCTION_CSP,
+      },
+    });
+  });
+}
+
 function configureSecurityHeaders(): void {
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
-    if (!details.url.startsWith('file://')) {
+    if (!details.url.startsWith('app://orchdeck/') && !details.url.startsWith('file://')) {
       callback(details.responseHeaders ? { responseHeaders: details.responseHeaders } : {});
       return;
     }
@@ -943,6 +1008,27 @@ function createMainWindow(): BrowserWindow {
     win.focus();
   });
 
+  setTimeout(() => {
+    if (!win.isDestroyed() && !win.isVisible()) {
+      win.show();
+      win.focus();
+    }
+  }, 1500);
+
+  win.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedUrl) => {
+    process.stderr.write(
+      `Renderer failed to load (${String(errorCode)}): ${errorDescription} [${validatedUrl}]\n`,
+    );
+  });
+
+  win.webContents.on('console-message', (event) => {
+    if (event.level === 'warning' || event.level === 'error') {
+      process.stderr.write(
+        `[renderer:${event.level}] ${event.message} (${event.sourceId}:${String(event.lineNumber)})\n`,
+      );
+    }
+  });
+
   win.on('closed', () => {
     if (mainWindow === win) {
       mainWindow = null;
@@ -961,7 +1047,7 @@ function createMainWindow(): BrowserWindow {
     if (devServerUrl && targetUrl.startsWith(devServerUrl)) {
       return;
     }
-    if (targetUrl.startsWith('file://')) {
+    if (targetUrl.startsWith('app://orchdeck/')) {
       return;
     }
     event.preventDefault();
@@ -971,7 +1057,7 @@ function createMainWindow(): BrowserWindow {
   if (devServerUrl) {
     void win.loadURL(devServerUrl);
   } else {
-    void win.loadFile(path.join(__dirname, '../renderer/index.html'));
+    void win.loadURL('app://orchdeck/index.html');
   }
 
   mainWindow = win;
@@ -980,6 +1066,7 @@ function createMainWindow(): BrowserWindow {
 
 async function bootstrap(): Promise<void> {
   await app.whenReady();
+  registerRendererProtocol();
   configureSecurityHeaders();
   const client = await supervisor.start();
   client.onNotification((notification) => {
