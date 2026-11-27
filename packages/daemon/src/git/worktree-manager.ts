@@ -9,13 +9,26 @@ import { sanitizeSubprocessEnv } from '../security/env-sanitizer.js';
 import { resolveSystemGitPath } from '../security/git-shim.js';
 
 function sanitizeSlug(raw: string): string {
-  const cleaned = raw
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9-]+/g, '-')
-    .replace(/^-+/, '')
-    .replace(/-+$/, '');
-  return cleaned.length > 0 ? cleaned.slice(0, 32) : 'worktree';
+  const lower = raw.trim().toLowerCase();
+  let mapped = '';
+  let lastWasDash = true;
+
+  for (const ch of lower) {
+    const isAlphaNum = (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9');
+    if (isAlphaNum) {
+      mapped += ch;
+      lastWasDash = false;
+    } else if (!lastWasDash) {
+      mapped += '-';
+      lastWasDash = true;
+    }
+  }
+
+  while (mapped.endsWith('-')) {
+    mapped = mapped.slice(0, -1);
+  }
+
+  return mapped.length > 0 ? mapped.slice(0, 32) : 'worktree';
 }
 
 export interface CreateWorktreeOptions {
