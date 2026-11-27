@@ -27,10 +27,16 @@ import type {
   ProjectsListResult,
   ProjectsUpdateParams,
   ProjectsUpdateResult,
+  ProviderId,
+  TaskRunActionResult,
+  TaskRunStartParams,
+  TaskRunStartResult,
+  TaskRunUpdatedNotificationParams,
   TurnCancelResult,
   TurnEventNotificationParams,
   TurnStartParams,
   TurnStartResult,
+  UsageSummaryResult,
 } from '@orchdeck/shared';
 
 interface PickDirectoryResult {
@@ -61,7 +67,12 @@ interface OrchdeckBridge {
   runProjectTests(projectId: string): Promise<ChangesRunTestsResult>;
   approveChanges(params: ChangesApproveParams): Promise<ChangesApproveResult>;
   discardChanges(projectId: string): Promise<ChangesDiscardResult>;
+  startTaskRun(params: TaskRunStartParams): Promise<TaskRunStartResult>;
+  approveTaskRunPlan(taskRunId: string): Promise<TaskRunActionResult>;
+  rejectTaskRunPlan(taskRunId: string): Promise<TaskRunActionResult>;
+  getUsageSummary(providerId?: ProviderId): Promise<UsageSummaryResult>;
   onTurnEvent(listener: (event: TurnEventNotificationParams) => void): () => void;
+  onTaskRunUpdated(listener: (event: TaskRunUpdatedNotificationParams) => void): () => void;
 }
 
 const bridge: OrchdeckBridge = {
@@ -104,6 +115,14 @@ const bridge: OrchdeckBridge = {
     ipcRenderer.invoke('orchdeck:changes-approve', params) as Promise<ChangesApproveResult>,
   discardChanges: (projectId: string) =>
     ipcRenderer.invoke('orchdeck:changes-discard', projectId) as Promise<ChangesDiscardResult>,
+  startTaskRun: (params: TaskRunStartParams) =>
+    ipcRenderer.invoke('orchdeck:task-run-start', params) as Promise<TaskRunStartResult>,
+  approveTaskRunPlan: (taskRunId: string) =>
+    ipcRenderer.invoke('orchdeck:task-run-approve-plan', taskRunId) as Promise<TaskRunActionResult>,
+  rejectTaskRunPlan: (taskRunId: string) =>
+    ipcRenderer.invoke('orchdeck:task-run-reject-plan', taskRunId) as Promise<TaskRunActionResult>,
+  getUsageSummary: (providerId?: ProviderId) =>
+    ipcRenderer.invoke('orchdeck:usage-summary', providerId) as Promise<UsageSummaryResult>,
   onTurnEvent: (listener: (event: TurnEventNotificationParams) => void) => {
     const handler = (_ipcEvent: IpcRendererEvent, payload: TurnEventNotificationParams): void => {
       listener(payload);
@@ -111,6 +130,18 @@ const bridge: OrchdeckBridge = {
     ipcRenderer.on('orchdeck:turn-event', handler);
     return () => {
       ipcRenderer.off('orchdeck:turn-event', handler);
+    };
+  },
+  onTaskRunUpdated: (listener: (event: TaskRunUpdatedNotificationParams) => void) => {
+    const handler = (
+      _ipcEvent: IpcRendererEvent,
+      payload: TaskRunUpdatedNotificationParams,
+    ): void => {
+      listener(payload);
+    };
+    ipcRenderer.on('orchdeck:task-run-updated', handler);
+    return () => {
+      ipcRenderer.off('orchdeck:task-run-updated', handler);
     };
   },
 };

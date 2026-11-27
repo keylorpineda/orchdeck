@@ -28,10 +28,16 @@ import type {
   ProjectsListResult,
   ProjectsUpdateParams,
   ProjectsUpdateResult,
+  ProviderId,
+  TaskRunActionResult,
+  TaskRunStartParams,
+  TaskRunStartResult,
+  TaskRunUpdatedNotificationParams,
   TurnCancelResult,
   TurnEventNotificationParams,
   TurnStartParams,
   TurnStartResult,
+  UsageSummaryResult,
 } from '@orchdeck/shared';
 
 export interface PickDirectoryResult {
@@ -62,7 +68,12 @@ export interface OrchdeckApi {
   runProjectTests(projectId: string): Promise<ChangesRunTestsResult>;
   approveChanges(params: ChangesApproveParams): Promise<ChangesApproveResult>;
   discardChanges(projectId: string): Promise<ChangesDiscardResult>;
+  startTaskRun(params: TaskRunStartParams): Promise<TaskRunStartResult>;
+  approveTaskRunPlan(taskRunId: string): Promise<TaskRunActionResult>;
+  rejectTaskRunPlan(taskRunId: string): Promise<TaskRunActionResult>;
+  getUsageSummary(providerId?: ProviderId): Promise<UsageSummaryResult>;
   onTurnEvent(listener: (event: TurnEventNotificationParams) => void): () => void;
+  onTaskRunUpdated(listener: (event: TaskRunUpdatedNotificationParams) => void): () => void;
 }
 
 declare global {

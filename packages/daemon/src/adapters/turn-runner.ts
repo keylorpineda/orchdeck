@@ -60,6 +60,7 @@ export class TurnRunner {
   private readonly registry: AdapterRegistry;
   private readonly db: DaemonDatabase;
   private readonly emitEvent: TurnEventSink;
+  private readonly listeners = new Set<TurnEventSink>();
   private readonly activeTurns = new Map<string, ActiveTurn>();
 
   constructor(options: {
@@ -72,7 +73,24 @@ export class TurnRunner {
     this.emitEvent = options.emitEvent;
   }
 
-  async startTurn(params: TurnStartParams): Promise<TurnStartResult> {
+  subscribeEvents(listener: TurnEventSink): () => void {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  }
+
+  private publishEvent(notification: TurnEventNotificationParams): void {
+    this.emitEvent(notification);
+    for (const listener of this.listeners) {
+      listener(notification);
+    }
+  }
+
+  async startTurn(
+    params: TurnStartParams,
+    options: { readonly turnId?: string | undefined } = {},
+  ): Promise<TurnStartResult> {
     const { parsed, adapter } = this.registry.resolveModelHandle(params.modelHandle);
     const session = await adapter.startSession({
       cwd: params.cwd,
@@ -82,7 +100,7 @@ export class TurnRunner {
       approvalMode: params.approvalMode ?? 'architect',
     });
 
-    const turnId = crypto.randomUUID();
+    const turnId = options.turnId ?? crypto.randomUUID();
     const completion = this.runStream(turnId, session.sessionId, parsed.modelId, adapter, params.prompt);
 
     this.activeTurns.set(turnId, {
@@ -146,7 +164,7 @@ export class TurnRunner {
           });
         }
 
-        this.emitEvent({
+        this.publishEvent({
           turnId,
           sessionId,
           provider: adapter.id,
@@ -155,7 +173,7 @@ export class TurnRunner {
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      this.emitEvent({
+      this.publishEvent({
         turnId,
         sessionId,
         provider: adapter.id,
@@ -166,7 +184,7 @@ export class TurnRunner {
           recoverable: false,
         },
       });
-      this.emitEvent({
+      this.publishEvent({
         turnId,
         sessionId,
         provider: adapter.id,

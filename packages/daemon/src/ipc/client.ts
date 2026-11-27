@@ -6,8 +6,8 @@ import {
   isJsonRpcResponse,
   type DaemonMethod,
   type DaemonMethodMap,
+  type DaemonNotification,
   type JsonRpcId,
-  type JsonRpcNotification,
   type JsonRpcRequest,
 } from '@orchdeck/shared';
 
@@ -23,7 +23,7 @@ export interface DaemonRpcClientOptions {
   readonly timeoutMs?: number | undefined;
 }
 
-export type NotificationListener = (notification: JsonRpcNotification) => void;
+export type NotificationListener = (notification: DaemonNotification) => void;
 
 export class JsonRpcClientError extends Error {
   readonly code: number;
@@ -121,7 +121,7 @@ export class DaemonRpcClient {
 
     if (isJsonRpcNotification(parsed)) {
       for (const listener of this.notificationListeners) {
-        listener(parsed);
+        listener(parsed as DaemonNotification);
       }
       return;
     }

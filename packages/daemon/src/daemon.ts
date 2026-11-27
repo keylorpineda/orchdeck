@@ -4,6 +4,7 @@ import type { ProviderAdapter } from '@orchdeck/shared';
 import { AdapterRegistry } from './adapters/adapter-registry.js';
 import { createDefaultMockAdapters } from './adapters/mock-adapter.js';
 import { TurnRunner } from './adapters/turn-runner.js';
+import { TaskRunOrchestrator } from './approvals/task-run-machine.js';
 import { DaemonDatabase } from './db/database.js';
 import { GitService } from './git/git-service.js';
 import { DaemonRpcServer } from './ipc/server.js';
@@ -45,12 +46,21 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Run
     },
   });
 
+  const taskRunOrchestrator = new TaskRunOrchestrator({
+    turnRunner,
+    gitService,
+    emitUpdated: (taskRun) => {
+      server?.broadcastNotification('taskRun.updated', { taskRun });
+    },
+  });
+
   server = new DaemonRpcServer({
     db,
     socketPath,
     authToken,
     registry,
     turnRunner,
+    taskRunOrchestrator,
     gitService,
   });
 
@@ -67,6 +77,7 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Run
     socketPath,
     authToken,
     close: async () => {
+      taskRunOrchestrator.dispose();
       await server.stop();
       db.close();
     },
