@@ -53,13 +53,26 @@ export function assertPathInsideRepo(repoRoot: string, targetPath: string): stri
 }
 
 function sanitizeBranchSlug(rawSlug: string): string {
-  const cleaned = rawSlug
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9/-]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .replace(/\/+/g, '-');
-  return cleaned.length > 0 ? cleaned : `task-${Date.now()}`;
+  const lower = rawSlug.trim().toLowerCase();
+  let mapped = '';
+  let lastWasDash = true;
+
+  for (const ch of lower) {
+    const isAlphaNum = (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9');
+    if (isAlphaNum) {
+      mapped += ch;
+      lastWasDash = false;
+    } else if (!lastWasDash) {
+      mapped += '-';
+      lastWasDash = true;
+    }
+  }
+
+  while (mapped.endsWith('-')) {
+    mapped = mapped.slice(0, -1);
+  }
+
+  return mapped.length > 0 ? mapped : `task-${Date.now()}`;
 }
 
 export class GitService {
