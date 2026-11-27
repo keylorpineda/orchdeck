@@ -28,6 +28,16 @@ import type {
   McpDecideApprovalResult,
   McpStatusParams,
   McpStatusResult,
+  MemoryDeleteResult,
+  MemoryImportDocParams,
+  MemoryImportDocResult,
+  MemoryListResult,
+  MemoryProposeFromChangeParams,
+  MemoryProposeFromChangeResult,
+  MemorySyncDocParams,
+  MemorySyncDocResult,
+  MemoryUpsertParams,
+  MemoryUpsertResult,
   MessagesAppendParams,
   MessagesAppendResult,
   MessagesListResult,
@@ -126,6 +136,14 @@ export interface OrchdeckApi {
   toggleSkill(params: SkillsToggleParams): Promise<SkillsToggleResult>;
   getMcpStatus(params?: McpStatusParams): Promise<McpStatusResult>;
   decideMcpApproval(params: McpDecideApprovalParams): Promise<McpDecideApprovalResult>;
+  listProjectMemory(projectId: string): Promise<MemoryListResult>;
+  upsertProjectMemory(params: MemoryUpsertParams): Promise<MemoryUpsertResult>;
+  deleteProjectMemory(id: string): Promise<MemoryDeleteResult>;
+  proposeMemoryFromChange(
+    params: MemoryProposeFromChangeParams,
+  ): Promise<MemoryProposeFromChangeResult>;
+  syncMemoryDoc(params: MemorySyncDocParams): Promise<MemorySyncDocResult>;
+  importMemoryDoc(params: MemoryImportDocParams): Promise<MemoryImportDocResult>;
   onMcpApprovalRequired(listener: (event: McpApprovalRequiredNotificationParams) => void): () => void;
   onTurnEvent(listener: (event: TurnEventNotificationParams) => void): () => void;
   onTaskRunUpdated(listener: (event: TaskRunUpdatedNotificationParams) => void): () => void;

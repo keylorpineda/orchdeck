@@ -27,6 +27,16 @@ import type {
   McpDecideApprovalResult,
   McpStatusParams,
   McpStatusResult,
+  MemoryDeleteResult,
+  MemoryImportDocParams,
+  MemoryImportDocResult,
+  MemoryListResult,
+  MemoryProposeFromChangeParams,
+  MemoryProposeFromChangeResult,
+  MemorySyncDocParams,
+  MemorySyncDocResult,
+  MemoryUpsertParams,
+  MemoryUpsertResult,
   MessagesAppendParams,
   MessagesAppendResult,
   MessagesListResult,
@@ -125,6 +135,14 @@ interface OrchdeckBridge {
   toggleSkill(params: SkillsToggleParams): Promise<SkillsToggleResult>;
   getMcpStatus(params?: McpStatusParams): Promise<McpStatusResult>;
   decideMcpApproval(params: McpDecideApprovalParams): Promise<McpDecideApprovalResult>;
+  listProjectMemory(projectId: string): Promise<MemoryListResult>;
+  upsertProjectMemory(params: MemoryUpsertParams): Promise<MemoryUpsertResult>;
+  deleteProjectMemory(id: string): Promise<MemoryDeleteResult>;
+  proposeMemoryFromChange(
+    params: MemoryProposeFromChangeParams,
+  ): Promise<MemoryProposeFromChangeResult>;
+  syncMemoryDoc(params: MemorySyncDocParams): Promise<MemorySyncDocResult>;
+  importMemoryDoc(params: MemoryImportDocParams): Promise<MemoryImportDocResult>;
   onMcpApprovalRequired(listener: (event: McpApprovalRequiredNotificationParams) => void): () => void;
   onTurnEvent(listener: (event: TurnEventNotificationParams) => void): () => void;
   onTaskRunUpdated(listener: (event: TaskRunUpdatedNotificationParams) => void): () => void;
@@ -224,6 +242,21 @@ const bridge: OrchdeckBridge = {
       'orchdeck:mcp-decide-approval',
       params,
     ) as Promise<McpDecideApprovalResult>,
+  listProjectMemory: (projectId: string) =>
+    ipcRenderer.invoke('orchdeck:memory-list', projectId) as Promise<MemoryListResult>,
+  upsertProjectMemory: (params: MemoryUpsertParams) =>
+    ipcRenderer.invoke('orchdeck:memory-upsert', params) as Promise<MemoryUpsertResult>,
+  deleteProjectMemory: (id: string) =>
+    ipcRenderer.invoke('orchdeck:memory-delete', id) as Promise<MemoryDeleteResult>,
+  proposeMemoryFromChange: (params: MemoryProposeFromChangeParams) =>
+    ipcRenderer.invoke(
+      'orchdeck:memory-propose-from-change',
+      params,
+    ) as Promise<MemoryProposeFromChangeResult>,
+  syncMemoryDoc: (params: MemorySyncDocParams) =>
+    ipcRenderer.invoke('orchdeck:memory-sync-doc', params) as Promise<MemorySyncDocResult>,
+  importMemoryDoc: (params: MemoryImportDocParams) =>
+    ipcRenderer.invoke('orchdeck:memory-import-doc', params) as Promise<MemoryImportDocResult>,
   onMcpApprovalRequired: (listener: (event: McpApprovalRequiredNotificationParams) => void) => {
     const handler = (
       _ipcEvent: IpcRendererEvent,

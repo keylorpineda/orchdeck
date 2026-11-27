@@ -64,6 +64,14 @@ export interface UiDictionary {
   readonly mcpDenyCall: string;
   readonly managedNativelyCli: string;
   readonly noPluginsFound: string;
+  readonly memoryBudget: string;
+  readonly memoryDecision: string;
+  readonly memoryConvention: string;
+  readonly memoryOpenItem: string;
+  readonly addMemory: string;
+  readonly memoryProposalTitle: string;
+  readonly saveMemory: string;
+  readonly dismiss: string;
 }
 
 const DICTIONARIES: Readonly<Record<UiLocale, UiDictionary>> = {
@@ -108,6 +116,14 @@ const DICTIONARIES: Readonly<Record<UiLocale, UiDictionary>> = {
     mcpDenyCall: 'Deny',
     managedNativelyCli: 'Managed natively by CLI',
     noPluginsFound: 'No local plugins discovered yet.',
+    memoryBudget: 'Prompt budget',
+    memoryDecision: 'Decision',
+    memoryConvention: 'Convention',
+    memoryOpenItem: 'Open Item',
+    addMemory: 'Save Memory',
+    memoryProposalTitle: 'Save change decision to Project Memory?',
+    saveMemory: 'Save to Memory',
+    dismiss: 'Dismiss',
   },
   es: {
     send: 'Enviar',
@@ -150,6 +166,14 @@ const DICTIONARIES: Readonly<Record<UiLocale, UiDictionary>> = {
     mcpDenyCall: 'Denegar',
     managedNativelyCli: 'Gestionado nativamente por CLI',
     noPluginsFound: 'Aún no se detectaron plugins locales.',
+    memoryBudget: 'Presupuesto prompt',
+    memoryDecision: 'Decisión',
+    memoryConvention: 'Convención',
+    memoryOpenItem: 'Pendiente',
+    addMemory: 'Guardar Memoria',
+    memoryProposalTitle: '¿Guardar decisión del commit en Memoria?',
+    saveMemory: 'Guardar en Memoria',
+    dismiss: 'Descartar',
   },
 };
 

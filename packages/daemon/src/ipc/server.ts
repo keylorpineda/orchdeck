@@ -34,6 +34,14 @@ import type { SecondOpinionOrchestrator } from '../fusion/second-opinion-orchest
 import { GitService } from '../git/git-service.js';
 import { WorktreeManager } from '../git/worktree-manager.js';
 import { LocalMcpHub } from '../mcp/local-mcp-hub.js';
+import {
+  DEFAULT_MEMORY_CHAR_BUDGET,
+  assertNoSecretsInMemory,
+  buildBudgetedMemoryInjection,
+  importMemoryFromRepoDoc,
+  proposeMemoryFromChangeCard,
+  syncMemoryToRepoDoc,
+} from '../memory/project-memory.js';
 import { PluginInspector } from '../plugins/plugin-inspector.js';
 import { ProviderCooldownTracker, buildUsageSummaryWithRadar } from '../usage/quota-radar.js';
 
@@ -1480,6 +1488,156 @@ export class DaemonRpcServer {
           }
           return makeSuccessResponse(request.id, {
             resolved: this.mcpHub ? this.mcpHub.decideApproval(approvalId, decision) : false,
+          });
+        }
+
+        case 'memory.list': {
+          const projectId = params['projectId'];
+          if (typeof projectId !== 'string' || projectId.length === 0) {
+            return makeErrorResponse(
+              request.id,
+              JSONRPC_ERROR_CODE.INVALID_PARAMS,
+              'memory.list requires non-empty projectId.',
+            );
+          }
+          const entries = this.db.listProjectMemory(projectId);
+          return makeSuccessResponse(request.id, {
+            entries,
+            promptPreview: buildBudgetedMemoryInjection(entries),
+            maxChars: DEFAULT_MEMORY_CHAR_BUDGET,
+          });
+        }
+
+        case 'memory.upsert': {
+          const projectId = params['projectId'];
+          const id = params['id'];
+          const category = params['category'];
+          const title = params['title'];
+          const content = params['content'];
+          if (
+            typeof projectId !== 'string' ||
+            projectId.length === 0 ||
+            (id !== undefined && typeof id !== 'string') ||
+            (category !== 'decision' && category !== 'convention' && category !== 'open_item') ||
+            typeof title !== 'string' ||
+            typeof content !== 'string'
+          ) {
+            return makeErrorResponse(
+              request.id,
+              JSONRPC_ERROR_CODE.INVALID_PARAMS,
+              'memory.upsert requires projectId, category, title, and content.',
+            );
+          }
+          assertNoSecretsInMemory(title, content);
+          const entry = this.db.upsertProjectMemory({
+            projectId,
+            id,
+            category,
+            title,
+            content,
+          });
+          return makeSuccessResponse(request.id, { entry });
+        }
+
+        case 'memory.delete': {
+          const id = params['id'];
+          if (typeof id !== 'string' || id.length === 0) {
+            return makeErrorResponse(
+              request.id,
+              JSONRPC_ERROR_CODE.INVALID_PARAMS,
+              'memory.delete requires non-empty id.',
+            );
+          }
+          return makeSuccessResponse(request.id, { deleted: this.db.deleteProjectMemory(id) });
+        }
+
+        case 'memory.proposeFromChange': {
+          const projectId = params['projectId'];
+          const chatId = params['chatId'];
+          const commitMessage = params['commitMessage'];
+          if (
+            typeof projectId !== 'string' ||
+            projectId.length === 0 ||
+            (chatId !== undefined && typeof chatId !== 'string') ||
+            typeof commitMessage !== 'string'
+          ) {
+            return makeErrorResponse(
+              request.id,
+              JSONRPC_ERROR_CODE.INVALID_PARAMS,
+              'memory.proposeFromChange requires projectId and commitMessage.',
+            );
+          }
+          const project = this.db.getProject(projectId);
+          if (!project) {
+            return makeErrorResponse(
+              request.id,
+              JSONRPC_ERROR_CODE.INVALID_PARAMS,
+              `Project not found: ${projectId}`,
+            );
+          }
+          const targetDir = this.resolveRepoWorkingDir(project, chatId);
+          const snapshot = await this.gitService.getChangeCardSnapshot(targetDir);
+          return makeSuccessResponse(request.id, {
+            proposal: proposeMemoryFromChangeCard(project.id, snapshot, commitMessage),
+          });
+        }
+
+        case 'memory.syncDoc': {
+          const projectId = params['projectId'];
+          const target = params['target'];
+          if (
+            typeof projectId !== 'string' ||
+            projectId.length === 0 ||
+            (target !== 'AGENTS.md' && target !== 'CLAUDE.md')
+          ) {
+            return makeErrorResponse(
+              request.id,
+              JSONRPC_ERROR_CODE.INVALID_PARAMS,
+              'memory.syncDoc requires projectId and target ("AGENTS.md" | "CLAUDE.md").',
+            );
+          }
+          const project = this.db.getProject(projectId);
+          if (!project) {
+            return makeErrorResponse(
+              request.id,
+              JSONRPC_ERROR_CODE.INVALID_PARAMS,
+              `Project not found: ${projectId}`,
+            );
+          }
+          const entries = this.db.listProjectMemory(project.id);
+          return makeSuccessResponse(
+            request.id,
+            syncMemoryToRepoDoc(project.rootPath, target, entries),
+          );
+        }
+
+        case 'memory.importDoc': {
+          const projectId = params['projectId'];
+          const target = params['target'];
+          if (
+            typeof projectId !== 'string' ||
+            projectId.length === 0 ||
+            (target !== 'AGENTS.md' && target !== 'CLAUDE.md')
+          ) {
+            return makeErrorResponse(
+              request.id,
+              JSONRPC_ERROR_CODE.INVALID_PARAMS,
+              'memory.importDoc requires projectId and target ("AGENTS.md" | "CLAUDE.md").',
+            );
+          }
+          const project = this.db.getProject(projectId);
+          if (!project) {
+            return makeErrorResponse(
+              request.id,
+              JSONRPC_ERROR_CODE.INVALID_PARAMS,
+              `Project not found: ${projectId}`,
+            );
+          }
+          const entries = importMemoryFromRepoDoc(this.db, project.id, project.rootPath, target);
+          return makeSuccessResponse(request.id, {
+            target,
+            importedCount: entries.length,
+            entries,
           });
         }
 
