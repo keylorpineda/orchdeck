@@ -1,3 +1,10 @@
+import type {
+  AdapterSummary,
+  AgentRole,
+  ApprovalMode,
+  TurnEventNotificationParams,
+} from './adapter.js';
+
 export const JSONRPC_VERSION = '2.0' as const;
 export const DAEMON_PROTOCOL_VERSION = '0.1.0' as const;
 
@@ -82,6 +89,33 @@ export interface ProjectsCreateResult {
   readonly project: ProjectRecord;
 }
 
+export interface AdaptersListResult {
+  readonly adapters: readonly AdapterSummary[];
+}
+
+export interface TurnStartParams {
+  readonly projectId: string;
+  readonly chatId: string;
+  readonly cwd: string;
+  readonly modelHandle: string;
+  readonly prompt: string;
+  readonly role?: AgentRole | undefined;
+  readonly approvalMode?: ApprovalMode | undefined;
+}
+
+export interface TurnStartResult {
+  readonly turnId: string;
+  readonly sessionId: string;
+}
+
+export interface TurnCancelParams {
+  readonly turnId: string;
+}
+
+export interface TurnCancelResult {
+  readonly cancelled: boolean;
+}
+
 export type EmptyParams = Record<string, never>;
 
 export interface DaemonMethodMap {
@@ -113,15 +147,41 @@ export interface DaemonMethodMap {
     params: ProjectsCreateParams;
     result: ProjectsCreateResult;
   };
+  'adapters.list': {
+    params: EmptyParams;
+    result: AdaptersListResult;
+  };
+  'turn.start': {
+    params: TurnStartParams;
+    result: TurnStartResult;
+  };
+  'turn.cancel': {
+    params: TurnCancelParams;
+    result: TurnCancelResult;
+  };
 }
 
 export type DaemonMethod = keyof DaemonMethodMap;
+
+export interface DaemonNotificationMap {
+  'turn.event': TurnEventNotificationParams;
+}
+
+export type DaemonNotificationMethod = keyof DaemonNotificationMap;
 
 export interface JsonRpcRequest<M extends DaemonMethod = DaemonMethod> {
   readonly jsonrpc: typeof JSONRPC_VERSION;
   readonly id: JsonRpcId;
   readonly method: M;
   readonly params: DaemonMethodMap[M]['params'];
+}
+
+export interface JsonRpcNotification<
+  M extends DaemonNotificationMethod = DaemonNotificationMethod,
+> {
+  readonly jsonrpc: typeof JSONRPC_VERSION;
+  readonly method: M;
+  readonly params: DaemonNotificationMap[M];
 }
 
 export interface JsonRpcErrorObject {
@@ -164,6 +224,19 @@ export function isJsonRpcRequest(value: unknown): value is JsonRpcRequest {
   return (
     value['jsonrpc'] === JSONRPC_VERSION &&
     isJsonRpcId(value['id']) &&
+    typeof value['method'] === 'string' &&
+    value['method'].length > 0 &&
+    isPlainObject(value['params'])
+  );
+}
+
+export function isJsonRpcNotification(value: unknown): value is JsonRpcNotification {
+  if (!isPlainObject(value)) {
+    return false;
+  }
+  return (
+    value['jsonrpc'] === JSONRPC_VERSION &&
+    !('id' in value) &&
     typeof value['method'] === 'string' &&
     value['method'].length > 0 &&
     isPlainObject(value['params'])

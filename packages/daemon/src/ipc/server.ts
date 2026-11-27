@@ -7,13 +7,20 @@ import {
   JSONRPC_VERSION,
   isJsonRpcRequest,
   redactSecrets,
+  type AgentRole,
+  type ApprovalMode,
   type DaemonMethod,
   type DaemonMethodMap,
+  type DaemonNotificationMap,
+  type DaemonNotificationMethod,
   type JsonRpcErrorResponse,
   type JsonRpcId,
+  type JsonRpcNotification,
   type JsonRpcRequest,
   type JsonRpcSuccessResponse,
 } from '@orchdeck/shared';
+import type { AdapterRegistry } from '../adapters/adapter-registry.js';
+import type { TurnRunner } from '../adapters/turn-runner.js';
 import type { DaemonDatabase } from '../db/database.js';
 
 const MAX_LINE_BYTES = 1024 * 1024;
@@ -22,6 +29,8 @@ export interface DaemonRpcServerOptions {
   readonly db: DaemonDatabase;
   readonly socketPath: string;
   readonly authToken: string;
+  readonly registry?: AdapterRegistry | undefined;
+  readonly turnRunner?: TurnRunner | undefined;
   readonly startedAtMs?: number | undefined;
 }
 
@@ -60,10 +69,26 @@ function constantTimeTokenMatch(expected: string, candidate: string): boolean {
   return crypto.timingSafeEqual(expectedBuf, candidateBuf);
 }
 
+function isOptionalRole(value: unknown): value is AgentRole | undefined {
+  return value === undefined || value === 'planner' || value === 'builder' || value === 'reviewer';
+}
+
+function isOptionalApprovalMode(value: unknown): value is ApprovalMode | undefined {
+  return (
+    value === undefined ||
+    value === 'plan' ||
+    value === 'architect' ||
+    value === 'express' ||
+    value === 'branch_pilot'
+  );
+}
+
 export class DaemonRpcServer {
   readonly socketPath: string;
   private readonly db: DaemonDatabase;
   private readonly authToken: string;
+  private readonly registry: AdapterRegistry | undefined;
+  private readonly turnRunner: TurnRunner | undefined;
   private readonly startedAtMs: number;
   private readonly server: net.Server;
   private readonly authenticatedSockets = new WeakSet<net.Socket>();
@@ -76,6 +101,8 @@ export class DaemonRpcServer {
     this.db = options.db;
     this.socketPath = options.socketPath;
     this.authToken = options.authToken;
+    this.registry = options.registry;
+    this.turnRunner = options.turnRunner;
     this.startedAtMs = options.startedAtMs ?? Date.now();
     this.server = net.createServer((socket) => {
       this.handleConnection(socket);
@@ -106,6 +133,10 @@ export class DaemonRpcServer {
   }
 
   async stop(): Promise<void> {
+    if (this.turnRunner) {
+      await this.turnRunner.stopAll();
+    }
+
     for (const socket of this.activeSockets) {
       socket.destroy();
     }
@@ -127,6 +158,23 @@ export class DaemonRpcServer {
 
     if (process.platform !== 'win32' && fs.existsSync(this.socketPath)) {
       fs.unlinkSync(this.socketPath);
+    }
+  }
+
+  broadcastNotification<M extends DaemonNotificationMethod>(
+    method: M,
+    params: DaemonNotificationMap[M],
+  ): void {
+    const payload: JsonRpcNotification<M> = {
+      jsonrpc: JSONRPC_VERSION,
+      method,
+      params,
+    };
+    const serialized = `${JSON.stringify(payload)}\n`;
+    for (const socket of this.activeSockets) {
+      if (!socket.destroyed && this.authenticatedSockets.has(socket)) {
+        socket.write(serialized);
+      }
     }
   }
 
@@ -184,14 +232,15 @@ export class DaemonRpcServer {
       return;
     }
 
-    const response = this.dispatch(socket, parsed);
-    this.send(socket, response);
+    void this.dispatch(socket, parsed).then((response) => {
+      this.send(socket, response);
+    });
   }
 
-  private dispatch(
+  private async dispatch(
     socket: net.Socket,
     request: JsonRpcRequest,
-  ): JsonRpcSuccessResponse | JsonRpcErrorResponse {
+  ): Promise<JsonRpcSuccessResponse | JsonRpcErrorResponse> {
     const params = request.params as unknown as Record<string, unknown>;
 
     if (request.method === 'daemon.authenticate') {
@@ -289,6 +338,79 @@ export class DaemonRpcServer {
             defaultBranch: defaultBranch?.trim(),
           });
           return makeSuccessResponse(request.id, { project });
+        }
+
+        case 'adapters.list': {
+          if (!this.registry) {
+            return makeSuccessResponse(request.id, { adapters: [] });
+          }
+          const adapters = await this.registry.listSummaries();
+          return makeSuccessResponse(request.id, { adapters });
+        }
+
+        case 'turn.start': {
+          if (!this.turnRunner) {
+            return makeErrorResponse(
+              request.id,
+              JSONRPC_ERROR_CODE.INTERNAL_ERROR,
+              'TurnRunner is not configured in this daemon instance.',
+            );
+          }
+          const projectId = params['projectId'];
+          const chatId = params['chatId'];
+          const cwd = params['cwd'];
+          const modelHandle = params['modelHandle'];
+          const prompt = params['prompt'];
+          const role = params['role'];
+          const approvalMode = params['approvalMode'];
+
+          if (
+            typeof projectId !== 'string' ||
+            projectId.length === 0 ||
+            typeof chatId !== 'string' ||
+            chatId.length === 0 ||
+            typeof cwd !== 'string' ||
+            cwd.length === 0 ||
+            typeof modelHandle !== 'string' ||
+            modelHandle.length === 0 ||
+            typeof prompt !== 'string' ||
+            prompt.length === 0 ||
+            !isOptionalRole(role) ||
+            !isOptionalApprovalMode(approvalMode)
+          ) {
+            return makeErrorResponse(
+              request.id,
+              JSONRPC_ERROR_CODE.INVALID_PARAMS,
+              'turn.start requires valid projectId, chatId, cwd, modelHandle, and prompt.',
+            );
+          }
+
+          const started = await this.turnRunner.startTurn({
+            projectId,
+            chatId,
+            cwd,
+            modelHandle,
+            prompt,
+            role,
+            approvalMode,
+          });
+          return makeSuccessResponse(request.id, started);
+        }
+
+        case 'turn.cancel': {
+          if (!this.turnRunner) {
+            return makeSuccessResponse(request.id, { cancelled: false });
+          }
+          const turnId = params['turnId'];
+          if (typeof turnId !== 'string' || turnId.length === 0) {
+            return makeErrorResponse(
+              request.id,
+              JSONRPC_ERROR_CODE.INVALID_PARAMS,
+              'turn.cancel requires non-empty turnId string.',
+            );
+          }
+          const cancelled = await this.turnRunner.cancelTurn(turnId);
+          return makeSuccessResponse(request.id, { cancelled });
         }
 
         default:
